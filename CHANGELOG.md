@@ -7,6 +7,7 @@ Anysub follows [Semantic Versioning](https://semver.org). The web and worker ima
 ### Added
 
 - A prompt under **Advanced options** when you transcribe: names and terms the model should spell the way you write them. It works with local models and with providers, and the API takes it as `prompt`.
+- LRC export, for synced lyrics in music players.
 
 ### Changed
 

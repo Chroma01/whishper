@@ -9,6 +9,7 @@ export type MemberProject = {
   workspaceId: string;
   name: string;
   mediaOriginalKey: string | null;
+  mediaFilename: string | null;
   canManage: boolean;
 };
 
@@ -28,6 +29,7 @@ function findProject(
       workspaceId: projects.workspaceId,
       name: projects.name,
       mediaOriginalKey: projects.mediaOriginalKey,
+      mediaFilename: projects.mediaFilename,
       canManage: canManage.mapWith(Boolean),
     })
     .from(projects)

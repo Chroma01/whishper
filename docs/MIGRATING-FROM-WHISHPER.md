@@ -24,7 +24,7 @@ Nothing. Anysub can't read Whishper's database or import subtitle files yet, so 
 | faster-whisper                                      | WhisperX: faster-whisper plus word alignment                                                |
 | Models chosen with `WHISPER_MODELS`                 | Models downloaded under **Administration > Local models**                                   |
 | Subtitle editor with CPS warnings                   | Studio with a waveform timeline, undo, autosave, and warnings for speed, length and overlap |
-| Download as TXT, JSON, VTT or SRT                   | Export as TXT, SRT, WebVTT, or Anysub JSON with word timings                                |
+| Download as TXT, JSON, VTT or SRT                   | Export as TXT, SRT, WebVTT, LRC, or Anysub JSON with word timings                           |
 | Translation with LibreTranslate                     | Not available yet                                                                           |
 | Transcribe from a URL with yt-dlp                   | Not available yet: download the file with `yt-dlp "<url>"`, then upload it                  |
 

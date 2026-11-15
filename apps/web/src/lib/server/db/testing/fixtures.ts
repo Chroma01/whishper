@@ -38,7 +38,7 @@ export type SeededProject = {
 };
 
 export function seedProject(
-  options: { mediaOriginalKey?: string | null } = {},
+  options: { mediaOriginalKey?: string | null; mediaFilename?: string } = {},
 ): SeededProject {
   const userId = seedUser();
   const workspace = db
@@ -56,6 +56,7 @@ export function seedProject(
       name: "Project",
       createdBy: userId,
       mediaOriginalKey: options.mediaOriginalKey ?? null,
+      mediaFilename: options.mediaFilename ?? null,
     })
     .returning({ id: projects.id })
     .get();

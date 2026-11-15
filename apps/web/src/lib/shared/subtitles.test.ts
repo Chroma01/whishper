@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatEditorTime,
   parseEditorTime,
+  renderLrc,
   renderPlainText,
   renderSrt,
   renderWebVtt,
@@ -116,5 +117,58 @@ describe("subtitle exports", () => {
       "First line wraps here.\nSecond cue.\n",
     );
     expect(renderPlainText([])).toBe("");
+  });
+
+  it("renders LRC with one line per cue and minutes past the hour", () => {
+    expect(renderLrc(cues)).toBe("[62:03.45]A subtitle.\n[62:05.00]\n");
+  });
+
+  it("clears an LRC line only when a pause of five seconds or more follows", () => {
+    const lyrics = [
+      { ...cues[0], startUs: 1_000_000, endUs: 2_500_000, text: "First\nline" },
+      {
+        ...cues[0],
+        position: 1,
+        startUs: 6_000_000,
+        endUs: 7_000_000,
+        text: "After a breath",
+      },
+      {
+        ...cues[0],
+        position: 2,
+        startUs: 12_000_000,
+        endUs: 13_000_000,
+        text: "After a break",
+      },
+    ];
+
+    expect(renderLrc(lyrics)).toBe(
+      "[00:01.00]First line\n[00:06.00]After a breath\n[00:07.00]\n[00:12.00]After a break\n[00:13.00]\n",
+    );
+  });
+
+  it("orders LRC lines by time and leaves out blank cues", () => {
+    const unordered = [
+      { ...cues[0], startUs: 9_000_000, endUs: 9_500_000, text: "Later" },
+      {
+        ...cues[0],
+        position: 1,
+        startUs: 1_000_000,
+        endUs: 2_000_000,
+        text: " \n ",
+      },
+      {
+        ...cues[0],
+        position: 2,
+        startUs: 8_000_000,
+        endUs: 8_600_000,
+        text: "Sooner",
+      },
+    ];
+
+    expect(renderLrc(unordered)).toBe(
+      "[00:08.00]Sooner\n[00:09.00]Later\n[00:09.50]\n",
+    );
+    expect(renderLrc([])).toBe("");
   });
 });

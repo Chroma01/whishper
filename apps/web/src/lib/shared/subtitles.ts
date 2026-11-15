@@ -15,6 +15,10 @@ export type SubtitleCueSnapshot = {
   words?: Record<string, unknown>[];
 };
 
+// Long enough for an instrumental break, so a breath between sung lines keeps
+// the previous line up instead of adding a blank one.
+const MIN_LRC_PAUSE_US = 5_000_000;
+
 export function formatEditorTime(microseconds: number): string {
   return formatSubtitleTime(microseconds, ".");
 }
@@ -58,12 +62,24 @@ export function renderWebVtt(cues: SubtitleCueSnapshot[]): string {
     .join("\n\n")}\n`;
 }
 
-// Cue line breaks only exist for subtitle wrapping, so a transcript reads as
-// one line per cue.
 export function renderPlainText(cues: SubtitleCueSnapshot[]): string {
-  const lines = cues
-    .map((cue) => normalizeCueText(cue.text).replace(/\s*\n\s*/g, " "))
-    .filter(Boolean);
+  const lines = cues.map((cue) => singleLineText(cue.text)).filter(Boolean);
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+// An LRC line has no end time and shows until the next timestamp. A blank
+// timestamped line clears a cue's text when a pause follows it.
+export function renderLrc(cues: SubtitleCueSnapshot[]): string {
+  const timed = cues
+    .map((cue) => ({ ...cue, text: singleLineText(cue.text) }))
+    .filter((cue) => cue.text)
+    .sort((first, second) => first.startUs - second.startUs);
+  const lines = timed.flatMap((cue, index) => {
+    const line = `${formatLrcTime(cue.startUs)}${cue.text}`;
+    const next = timed[index + 1];
+    const pausesAfter = !next || next.startUs - cue.endUs >= MIN_LRC_PAUSE_US;
+    return pausesAfter ? [line, formatLrcTime(cue.endUs)] : [line];
+  });
   return lines.length ? `${lines.join("\n")}\n` : "";
 }
 
@@ -77,6 +93,19 @@ function formatSubtitleTime(
   const seconds = Math.floor((milliseconds % 60_000) / 1_000);
   const remainder = milliseconds % 1_000;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${separator}${String(remainder).padStart(3, "0")}`;
+}
+
+function formatLrcTime(microseconds: number): string {
+  const centiseconds = Math.max(0, Math.floor(microseconds / 10_000));
+  const minutes = Math.floor(centiseconds / 6_000);
+  const seconds = Math.floor((centiseconds % 6_000) / 100);
+  return `[${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centiseconds % 100).padStart(2, "0")}]`;
+}
+
+// Cue line breaks only exist for subtitle wrapping, so transcripts and lyrics
+// read as one line per cue.
+function singleLineText(value: string): string {
+  return normalizeCueText(value).replace(/\s*\n\s*/g, " ");
 }
 
 function normalizeCueText(value: string): string {

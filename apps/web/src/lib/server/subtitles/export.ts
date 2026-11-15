@@ -1,3 +1,5 @@
+import { extname } from "node:path";
+
 import { db } from "#lib/server/db/index.ts";
 import { notFound } from "#lib/server/http/errors.ts";
 import {
@@ -11,6 +13,7 @@ import {
   type TrackExportFormat,
 } from "#lib/shared/routes.ts";
 import {
+  renderLrc,
   renderPlainText,
   renderSrt,
   renderWebVtt,
@@ -40,21 +43,21 @@ export function exportTrackForUser(
 
 function trackExportResponse(
   format: TrackExportFormat,
-  project: Pick<MemberProject, "id" | "name">,
+  project: Pick<MemberProject, "id" | "name" | "mediaFilename">,
   track: SubtitleTrack,
   cues: SubtitleCueSnapshot[],
 ): Response {
-  const baseName = safeFilename(`${project.name}-${track.language}`);
+  const baseName = downloadName(format, project, track);
   const asciiName =
     baseName
       .normalize("NFKD")
-      .replace(/[^\x20-\x7e]+/g, "-")
+      .replace(/(?:[^\x20-\x7e]|["\\])+/g, "-")
       .replace(/^-+|-+$/g, "") || "subtitles";
   const output = exportBody(format, project, track, cues);
   return new Response(output.body, {
     headers: {
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="${asciiName}.${format}"; filename*=UTF-8''${encodeURIComponent(`${baseName}.${format}`)}`,
+      "Content-Disposition": `attachment; filename="${asciiName}.${format}"; filename*=UTF-8''${encodeFilenameParameter(`${baseName}.${format}`)}`,
       "Content-Type": output.contentType,
     },
   });
@@ -74,6 +77,9 @@ function exportBody(
   }
   if (format === "vtt") {
     return { body: renderWebVtt(cues), contentType: "text/vtt; charset=utf-8" };
+  }
+  if (format === "lrc") {
+    return { body: renderLrc(cues), contentType: "text/plain; charset=utf-8" };
   }
   if (format === "txt") {
     return {
@@ -100,6 +106,28 @@ function exportBody(
     )}\n`,
     contentType: "application/json; charset=utf-8",
   };
+}
+
+// Music players find lyrics by the song's file name, so an LRC file takes the
+// uploaded file's name and can sit next to it.
+function downloadName(
+  format: TrackExportFormat,
+  project: Pick<MemberProject, "name" | "mediaFilename">,
+  track: SubtitleTrack,
+): string {
+  const filename = project.mediaFilename;
+  if (format === "lrc" && filename) {
+    return filename.slice(0, filename.length - extname(filename).length);
+  }
+  return safeFilename(`${project.name}-${track.language}`);
+}
+
+// RFC 5987 also escapes ' ( ) and *, which encodeURIComponent leaves as is.
+function encodeFilenameParameter(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 function safeFilename(value: string): string {

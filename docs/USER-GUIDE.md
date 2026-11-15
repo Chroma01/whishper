@@ -159,6 +159,7 @@ Download the transcript as:
 
 - SRT
 - WebVTT
+- LRC, synced lyrics for music players. It takes the uploaded file's name, so it can sit next to the song.
 - Plain text, one subtitle per line
 - Anysub JSON, with word timings
 

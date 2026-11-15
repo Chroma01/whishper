@@ -20,6 +20,7 @@ describe("projectForUser", () => {
       workspaceId: project.workspaceId,
       name: "Project",
       mediaOriginalKey: "media/source.mp4",
+      mediaFilename: null,
       canManage: false,
     });
   });

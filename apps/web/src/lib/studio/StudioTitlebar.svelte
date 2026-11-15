@@ -11,6 +11,11 @@
     { format: "srt", name: "SRT", description: "Universal subtitle file" },
     { format: "vtt", name: "WebVTT", description: "Web video captions" },
     {
+      format: "lrc",
+      name: "LRC",
+      description: "Synced lyrics for music players",
+    },
+    {
       format: "txt",
       name: "Plain text",
       description: "Transcript without timecodes",
