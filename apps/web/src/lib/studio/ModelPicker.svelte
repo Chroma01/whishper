@@ -165,13 +165,18 @@
     {:else}
       <ul class="grid gap-1" aria-label="Detected hardware">
         {#each hardware as device (device)}
-          <li class="flex items-start gap-1.5">
-            <span class="mt-px shrink-0" aria-hidden="true">
+          <li
+            class="flex min-w-0 items-center gap-1.5 whitespace-nowrap"
+            title={[device.name, ...device.details].join(" · ")}
+          >
+            <span class="shrink-0" aria-hidden="true">
               <Icon name="cpu" size={14} />
             </span>
-            <span class="min-w-0 break-words">
-              {[device.name, ...device.details].join(" · ")}
-            </span>
+            <span class="truncate">{device.name}</span>
+            {#each device.details as detail (detail)}
+              <span class="shrink-0" aria-hidden="true">·</span>
+              <span class="shrink-0">{detail}</span>
+            {/each}
           </li>
         {:else}
           <li>Hardware details unavailable</li>

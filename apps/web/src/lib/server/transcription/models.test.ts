@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   availableTranscriptionModels,
   detectedWorkerHardware,
+  shortCpuName,
 } from "#lib/server/transcription/models.ts";
 
 const GIB = 1024 ** 3;
@@ -65,7 +66,10 @@ function worker(
 function cpu(availableGib: number, totalGib = 16): WorkerHardware {
   return {
     device: "cpu",
-    cpu: { model: "Test CPU", logicalCores: 8 },
+    cpu: {
+      model: "Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz",
+      logicalCores: 8,
+    },
     memory: { totalBytes: totalGib * GIB, availableBytes: availableGib * GIB },
     gpus: [],
   };
@@ -220,9 +224,22 @@ describe("available transcription models", () => {
     expect(detectedWorkerHardware([local, local, worker(null, [])])).toEqual([
       {
         kind: "cpu",
-        name: "Test CPU",
-        details: ["8 logical cores", "12.0 GiB RAM available"],
+        name: "Intel Core i7-10750H",
+        details: ["8 threads", "12.0 GiB RAM free"],
       },
     ]);
+  });
+
+  it.each([
+    ["AMD Ryzen 7 8845HS w/ Radeon 780M Graphics", "AMD Ryzen 7 8845HS"],
+    ["AMD Ryzen 5 5600G with Radeon Graphics", "AMD Ryzen 5 5600G"],
+    ["AMD Ryzen 9 5950X 16-Core Processor", "AMD Ryzen 9 5950X"],
+    ["AMD EPYC 7763 64-Core Processor", "AMD EPYC 7763"],
+    ["Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz", "Intel Core i7-10750H"],
+    ["Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz", "Intel Xeon CPU E5-2680 v4"],
+    ["13th Gen Intel(R) Core(TM) i7-13700K", "13th Gen Intel Core i7-13700K"],
+    ["QEMU Virtual CPU version 2.5+", "QEMU Virtual CPU version 2.5+"],
+  ])("shortens the CPU name %s", (name, short) => {
+    expect(shortCpuName(name)).toBe(short);
   });
 });

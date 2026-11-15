@@ -109,7 +109,7 @@
     {@render fact(
       "Processor",
       worker.cpu?.model ?? "Unknown",
-      worker.cpu ? `${worker.cpu.cores} logical cores` : undefined,
+      worker.cpu ? `${worker.cpu.cores} threads` : undefined,
     )}
     {@render fact(
       "Graphics card",

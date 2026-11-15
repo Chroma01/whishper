@@ -275,10 +275,23 @@ function scoreModelFit(
   };
 }
 
+// CPU names carry marketing extras, such as "(TM)", the clock speed or the
+// built-in graphics, that crowd out the model name.
+export function shortCpuName(name: string): string {
+  return name
+    .replace(/\((?:R|TM)\)|[®™]/gi, "")
+    .replace(/\s+(?:w\/|with)\s.*$/i, "")
+    .replace(/\s*@.*$/, "")
+    .replace(/\s+(?:\d+-Core\s+)?Processor$/i, "")
+    .replace(/\s+CPU$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function describeHardware(
   hardware: WorkerHardware,
 ): DetectedWorkerHardware {
-  const ram = `${formatBytes(hardware.memory.availableBytes)} RAM available`;
+  const ram = `${formatBytes(hardware.memory.availableBytes)} RAM free`;
   if (hardware.device === "cuda" && hardware.gpus[0]) {
     const gpu = hardware.gpus[0];
     return {
@@ -289,7 +302,7 @@ export function describeHardware(
   }
   return {
     kind: "cpu",
-    name: hardware.cpu.model ?? "CPU",
-    details: [`${hardware.cpu.logicalCores} logical cores`, ram],
+    name: hardware.cpu.model ? shortCpuName(hardware.cpu.model) : "CPU",
+    details: [`${hardware.cpu.logicalCores} threads`, ram],
   };
 }
