@@ -80,10 +80,34 @@ class IntegerOption:
         return value
 
 
+@dataclass(frozen=True)
+class TextOption:
+    name: str
+    max_length: int
+    description: str
+
+    def schema(self) -> dict[str, Any]:
+        return {"type": "string", "maxLength": self.max_length, "description": self.description}
+
+    def parse(self, options: dict[str, Any]) -> str | None:
+        value = options.get(self.name, "")
+        if not isinstance(value, str) or len(value) > self.max_length:
+            raise AdapterExecutionError(
+                f"{self.name} must be text of at most {self.max_length} characters.",
+                retryable=False,
+            )
+        return value.strip() or None
+
+
 MAX_LINE_LENGTH = IntegerOption(
     name="maxLineLength",
     minimum=20,
     maximum=120,
     default=42,
     description="Maximum subtitle cue length in characters.",
+)
+PROMPT = TextOption(
+    name="prompt",
+    max_length=500,
+    description="Names, terms or a sentence in the spoken language, to help with spelling.",
 )

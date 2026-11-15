@@ -16,7 +16,7 @@ from ..models import (
     TranscriptArtifact,
     TranscriptionRequest,
 )
-from ..options import MAX_LINE_LENGTH
+from ..options import MAX_LINE_LENGTH, PROMPT
 from ..progress import progress_span
 from ..retry import Sleep
 from ..timing import us_to_seconds
@@ -56,6 +56,7 @@ async def transcribe_remotely(
     settings = runtime if runtime is not None else AdapterRuntimeSettings()
     source = require_shared_media(request.media_path, settings.data_root)
     max_line_length = MAX_LINE_LENGTH.parse(request.options)
+    prompt = PROMPT.parse(request.options)
 
     await report(0.0, "Reading the source media")
     probe = normalize_probe(await probe_source(source))
@@ -71,7 +72,7 @@ async def transcribe_remotely(
         async with httpx.AsyncClient(transport=transport) as client:
             api = SpeechApi(access, client, sleep)
             transcripts = await _transcribe_chunks(
-                api, chunks, request.language, progress_span(report, *REQUEST_SPAN)
+                api, chunks, request.language, prompt, progress_span(report, *REQUEST_SPAN)
             )
 
     await report(REQUEST_SPAN[1], "Building subtitle cues")
@@ -96,6 +97,7 @@ async def _transcribe_chunks(
     api: SpeechApi,
     chunks: list[AudioChunk],
     language: str | None,
+    prompt: str | None,
     report: ProgressReporter,
 ) -> list[VerboseTranscript]:
     limit = asyncio.Semaphore(PARALLEL_REQUESTS)
@@ -109,7 +111,7 @@ async def _transcribe_chunks(
     async def transcribe(chunk: AudioChunk) -> VerboseTranscript:
         nonlocal finished
         async with limit:
-            transcript = await api.transcribe(chunk.path, language)
+            transcript = await api.transcribe(chunk.path, language, prompt)
         async with reporting:
             finished += 1
             await report(finished / total, f"Transcribed {finished} of {total} parts")

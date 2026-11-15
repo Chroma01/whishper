@@ -6,6 +6,7 @@ import {
   startTranscription,
   transcriptionForUser,
 } from "#lib/server/api/transcriptions.ts";
+import { TranscriptionRequestSchema } from "#lib/server/api/schemas.ts";
 import { db } from "#lib/server/db/index.ts";
 import {
   jobs,
@@ -44,6 +45,26 @@ describe("API transcriptions", () => {
       language: "de",
       options: { maxLineLength: 36 },
     });
+  });
+
+  it("send a trimmed prompt, and leave out a blank one", () => {
+    const project = readyProject();
+    const optionsFor = (prompt: string) => {
+      const run = startTranscription(
+        project.userId,
+        project.projectId,
+        TranscriptionRequestSchema.parse({ model: project.model, prompt }),
+      );
+      cancelTranscription(project.userId, project.projectId, run.id);
+      const job = db.select().from(jobs).where(eq(jobs.runId, run.id)).get();
+      if (job?.payload.kind !== "transcribe") throw new Error("Expected a job");
+      return job.payload.options;
+    };
+
+    expect(optionsFor("  Anysub, WhisperX ")).toMatchObject({
+      prompt: "Anysub, WhisperX",
+    });
+    expect(optionsFor("   ")).not.toHaveProperty("prompt");
   });
 
   it("refuse options the model does not take", () => {

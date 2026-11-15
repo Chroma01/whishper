@@ -2,6 +2,7 @@ import asyncio
 import sys
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -108,6 +109,11 @@ async def test_model_load_uses_the_configured_cpu_threads(settings: WorkerSettin
     assert RecordingWhisperX.threads == 3
 
 
+@dataclass(frozen=True)
+class StubAsrOptions:
+    initial_prompt: str | None = None
+
+
 class StubWhisperX:
     def __init__(
         self,
@@ -122,6 +128,7 @@ class StubWhisperX:
         self.aligned = False
         self.loads = 0
         self.languages: list[str | None] = []
+        self.prompts: list[str | None] = []
 
     def load_audio(self, path: str) -> list[float]:
         return [0.0] * 16_000
@@ -133,10 +140,13 @@ class StubWhisperX:
         outer = self
 
         class Model:
+            options = StubAsrOptions()
+
             def transcribe(
                 self, audio: list[float], batch_size: int, language: str | None
             ) -> dict[str, Any]:
                 outer.languages.append(language)
+                outer.prompts.append(self.options.initial_prompt)
                 if outer.asr_error:
                     raise outer.asr_error
                 return {"language": "en", "segments": [{"start": 0.0, "end": 1.0, "text": "Hi"}]}
@@ -345,6 +355,30 @@ async def test_a_language_change_keeps_the_loaded_model(transcribe_setup: Instal
 
     assert stub.loads == 1
     assert stub.languages == ["en", "es", None]
+
+
+async def test_each_run_uses_its_own_prompt_on_the_loaded_model(
+    transcribe_setup: InstallStub,
+) -> None:
+    stub = StubWhisperX()
+    adapter, request = transcribe_setup(stub)
+
+    for options in ({"prompt": "Anysub, WhisperX"}, {}, {"prompt": "   "}):
+        await adapter.transcribe(request.model_copy(update={"options": options}), noop_progress)
+
+    assert stub.loads == 1
+    assert stub.prompts == ["Anysub, WhisperX", None, None]
+
+
+async def test_a_prompt_longer_than_the_limit_is_refused(transcribe_setup: InstallStub) -> None:
+    adapter, request = transcribe_setup(StubWhisperX())
+
+    with pytest.raises(AdapterExecutionError, match="at most 500 characters") as raised:
+        await adapter.transcribe(
+            request.model_copy(update={"options": {"prompt": "x" * 501}}), noop_progress
+        )
+
+    assert raised.value.retryable is False
 
 
 async def test_an_unsupported_language_fails_permanently_before_loading(

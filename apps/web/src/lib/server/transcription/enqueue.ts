@@ -15,7 +15,11 @@ import {
   type Precision,
 } from "#lib/shared/instance-settings.ts";
 import { DETECT_LANGUAGE, LANGUAGE_TAG } from "#lib/shared/languages.ts";
-import { DEFAULT_MAX_LINE_LENGTH, MAX_BATCH_SIZE } from "#lib/shared/limits.ts";
+import {
+  DEFAULT_MAX_LINE_LENGTH,
+  MAX_BATCH_SIZE,
+  MAX_PROMPT_LENGTH,
+} from "#lib/shared/limits.ts";
 import {
   acceptsOption,
   parseModelKey,
@@ -26,6 +30,7 @@ type TranscriptionOptions = {
   maxLineLength?: number;
   batchSize?: number;
   precision?: Precision;
+  prompt?: string;
 };
 
 export type TranscriptionRequest = {
@@ -44,6 +49,7 @@ export function parseTranscriptionRequest(
   const maxLineLength = Number(
     String(values.get("maxLineLength") ?? DEFAULT_MAX_LINE_LENGTH).trim(),
   );
+  const prompt = String(values.get("prompt") ?? "").trim();
 
   if (!model) {
     throw badRequest("Choose an available transcription model.");
@@ -69,6 +75,11 @@ export function parseTranscriptionRequest(
       `Maximum line length must be between ${MIN_LINE_LENGTH} and ${MAX_LINE_LENGTH} characters.`,
     );
   }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    throw badRequest(
+      `The prompt can be at most ${MAX_PROMPT_LENGTH} characters.`,
+    );
+  }
 
   return {
     ...model,
@@ -77,6 +88,7 @@ export function parseTranscriptionRequest(
       alignment: values.get("alignment") === "on",
       maxLineLength,
       ...(batchSize === undefined ? {} : { batchSize }),
+      ...(prompt ? { prompt } : {}),
     },
   };
 }

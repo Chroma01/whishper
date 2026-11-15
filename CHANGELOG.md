@@ -2,6 +2,16 @@
 
 Anysub follows [Semantic Versioning](https://semver.org). The web and worker images always share one version. Each release lists what changed for the people who run and use Anysub.
 
+## [Unreleased]
+
+### Added
+
+- A prompt under **Advanced options** when you transcribe: names and terms the model should spell the way you write them. It works with local models and with providers, and the API takes it as `prompt`.
+
+### Changed
+
+- The transcribe form keeps **Start transcription** at the bottom of the panel, and word alignment moved to **Advanced options**.
+
 ## [4.2.0] - 2026-11-13
 
 This release adds external providers, so Anysub can transcribe without a GPU, and a public API for scripts and other apps.

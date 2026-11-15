@@ -23,11 +23,10 @@ The library search matches project names. Tick **Subtitle text** to search the s
 ## Transcribing
 
 1. Open the project and choose a model. `Small` is a good start on a CPU.
-2. Leave **Accurate word alignment** on if you want word-level timings.
-3. Choose the spoken language, or leave it on **Detect automatically**. You can search the list without accents: `espanol` finds Spanish.
-4. Start the transcription.
+2. Choose the spoken language, or leave it on **Detect automatically**. You can search the list without accents: `espanol` finds Spanish.
+3. Start the transcription.
 
-**Advanced options** has the maximum line length (42 characters by default) and the batch size. Lower the batch size if the worker runs out of memory.
+**Advanced options** has word alignment, a [prompt](#prompt), the maximum line length (42 characters by default) and the batch size. Word alignment gives word-level timestamps, for editing and karaoke. Transcription is faster without it. Lower the batch size if the worker runs out of memory.
 
 The form starts from the owner's [transcription defaults](ADMINISTRATION.md#transcription-defaults).
 
@@ -53,6 +52,10 @@ If the owner added a [speech provider](PROVIDERS.md), its models are in the same
 ### Line length
 
 After transcription, long lines are split at natural breaks. The limit is 42 characters by default and can be 20 to 120. Words are never cut, so a single very long word can go over. Scripts such as Chinese, Japanese and Korean get shorter limits automatically.
+
+### Prompt
+
+A prompt helps the model with words it may not know, such as names, brands and technical terms. Write a short sentence that uses them the way you want them spelled, in the spoken language: `Dr. Okonkwo talks about Anysub and WhisperX.` A sentence usually works better than a bare list of words. Keep it about the recording: a prompt that doesn't fit the audio can make the transcript worse.
 
 ### Runs and failures
 

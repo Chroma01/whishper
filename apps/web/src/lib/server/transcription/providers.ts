@@ -21,6 +21,7 @@ import {
   type NewProviderModel,
 } from "#lib/shared/providers.ts";
 import { detectProviderBrand } from "#lib/shared/provider-brands.ts";
+import { MAX_PROMPT_LENGTH } from "#lib/shared/limits.ts";
 import {
   modelKey,
   REMOTE_ADAPTER_ID,
@@ -41,6 +42,7 @@ const REMOTE_OPTIONS_SCHEMA = {
       minimum: MIN_LINE_LENGTH,
       maximum: MAX_LINE_LENGTH,
     },
+    prompt: { type: "string", maxLength: MAX_PROMPT_LENGTH },
   },
   additionalProperties: false,
 };

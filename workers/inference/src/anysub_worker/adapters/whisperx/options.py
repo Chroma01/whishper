@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from anysub_worker.models import WorkerDevice
-from anysub_worker.options import MAX_LINE_LENGTH, BooleanOption, ChoiceOption, IntegerOption
+from anysub_worker.options import (
+    MAX_LINE_LENGTH,
+    PROMPT,
+    BooleanOption,
+    ChoiceOption,
+    IntegerOption,
+)
 
 BATCH_SIZE_BY_DEVICE: dict[WorkerDevice, int] = {"cpu": 4, "cuda": 16}
 
@@ -32,7 +38,7 @@ PRECISION = ChoiceOption(
     default="auto",
     description="Model weight precision. Lower precision runs faster and uses less memory.",
 )
-OPTIONS = (ALIGNMENT, BATCH_SIZE, MAX_LINE_LENGTH, PRECISION)
+OPTIONS = (ALIGNMENT, BATCH_SIZE, MAX_LINE_LENGTH, PRECISION, PROMPT)
 
 
 @dataclass(frozen=True)
@@ -41,6 +47,7 @@ class TranscriptionOptions:
     batch_size: int
     max_line_length: int
     compute_type: str
+    prompt: str | None
 
 
 def options_schema() -> dict[str, Any]:
@@ -57,4 +64,5 @@ def parse_options(options: dict[str, Any], *, device: WorkerDevice) -> Transcrip
         batch_size=BATCH_SIZE.parse(options, default=BATCH_SIZE_BY_DEVICE[device]),
         max_line_length=MAX_LINE_LENGTH.parse(options),
         compute_type=COMPUTE_TYPES[PRECISION.parse(options)][device],
+        prompt=PROMPT.parse(options),
     )

@@ -59,6 +59,7 @@ export function startTranscription(
       alignment: input.alignment ?? defaults.alignment,
       maxLineLength: input.maxLineLength ?? defaults.maxLineLength,
       ...(input.batchSize === undefined ? {} : { batchSize: input.batchSize }),
+      ...(input.prompt ? { prompt: input.prompt } : {}),
     },
   });
   return requireTranscription(db, projectId, runId);

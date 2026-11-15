@@ -74,46 +74,53 @@
     <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
       <CueList {editor} />
     </div>
+  {:else if !isRunActive(run) && hasSourceMedia}
+    <TranscribePanel
+      models={transcriptionModels}
+      hardware={detectedHardware}
+      defaults={transcriptionDefaults}
+      {mediaDurationUs}
+    >
+      {#snippet intro()}
+        {@render status()}
+      {/snippet}
+    </TranscribePanel>
   {:else}
     <div class="min-h-0 flex-1 overflow-y-auto px-4 pt-4">
       <div class="mx-auto grid max-w-md gap-4">
-        <div class="grid gap-1">
-          <h3 class="flex items-center gap-2 text-sm font-semibold text-text">
-            <span class="text-accent" aria-hidden="true">
-              <Icon name="subtitles" size={16} />
-            </span>
-            {#if isRunActive(run)}
-              Preparing the first track
-            {:else if hasSourceMedia}
-              Ready to transcribe
-            {:else}
-              No subtitle track
-            {/if}
-          </h3>
-          {#if isRunActive(run)}
-            <p class="text-sm text-text-muted">
-              The worker will place normalized subtitle cues here when
-              processing finishes.
-            </p>
-          {:else if hasSourceMedia}
-            <p class="text-xs text-text-muted">
-              {processingNote(transcriptionModels)}
-            </p>
-          {:else}
-            <p class="text-sm text-text-muted">
-              This project does not have source media or a transcription run.
-            </p>
-          {/if}
-        </div>
-        {#if !isRunActive(run) && hasSourceMedia}
-          <TranscribePanel
-            models={transcriptionModels}
-            hardware={detectedHardware}
-            defaults={transcriptionDefaults}
-            {mediaDurationUs}
-          />
-        {/if}
+        {@render status()}
       </div>
     </div>
   {/if}
 </section>
+
+{#snippet status()}
+  <div class="grid gap-1">
+    <h3 class="flex items-center gap-2 text-sm font-semibold text-text">
+      <span class="text-accent" aria-hidden="true">
+        <Icon name="subtitles" size={16} />
+      </span>
+      {#if isRunActive(run)}
+        Preparing the first track
+      {:else if hasSourceMedia}
+        Ready to transcribe
+      {:else}
+        No subtitle track
+      {/if}
+    </h3>
+    {#if isRunActive(run)}
+      <p class="text-sm text-text-muted">
+        The worker will place normalized subtitle cues here when processing
+        finishes.
+      </p>
+    {:else if hasSourceMedia}
+      <p class="text-xs text-text-muted">
+        {processingNote(transcriptionModels)}
+      </p>
+    {:else}
+      <p class="text-sm text-text-muted">
+        This project does not have source media or a transcription run.
+      </p>
+    {/if}
+  </div>
+{/snippet}

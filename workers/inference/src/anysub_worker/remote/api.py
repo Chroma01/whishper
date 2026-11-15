@@ -73,11 +73,13 @@ class SpeechApi:
     client: httpx.AsyncClient
     sleep: Sleep = asyncio.sleep
 
-    async def transcribe(self, audio: Path, language: str | None) -> VerboseTranscript:
+    async def transcribe(
+        self, audio: Path, language: str | None, prompt: str | None = None
+    ) -> VerboseTranscript:
         failures = 0
         while True:
             try:
-                response = await self._post(audio, language)
+                response = await self._post(audio, language, prompt)
             except httpx.ReadTimeout as error:
                 # The provider got the audio and may bill it, so a resend could
                 # pay twice for one transcription.
@@ -103,7 +105,7 @@ class SpeechApi:
                 raise self._failure(response)
             return self._parse(response)
 
-    async def _post(self, audio: Path, language: str | None) -> httpx.Response:
+    async def _post(self, audio: Path, language: str | None, prompt: str | None) -> httpx.Response:
         fields: dict[str, str | list[str]] = {
             "model": self.access.model,
             "response_format": "verbose_json",
@@ -111,6 +113,8 @@ class SpeechApi:
         }
         if language:
             fields["language"] = language
+        if prompt:
+            fields["prompt"] = prompt
         api_key = self.access.api_key
         headers = {"Authorization": f"Bearer {api_key.get_secret_value()}"} if api_key else {}
         request = self.client.build_request(

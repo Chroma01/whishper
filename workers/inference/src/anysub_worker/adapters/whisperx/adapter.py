@@ -4,6 +4,7 @@ import asyncio
 import gc
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from importlib import import_module
 from importlib.metadata import version
 from importlib.util import find_spec
@@ -140,6 +141,10 @@ class WhisperXAdapter:
 
         await report_progress(0.12, f"Loading {request.model_id} model")
         model = await self._load_model(whisperx, _ModelKey(request.model_id, options.compute_type))
+        # WhisperX takes the prompt only when it loads a model, and the model
+        # stays loaded between runs. Its pipeline reads these options on every
+        # batch, so setting them each run keeps one run's prompt out of the next.
+        model.options = replace(model.options, initial_prompt=options.prompt)
 
         await report_progress(0.16, "Transcribing speech")
         result = await _run_in_thread(

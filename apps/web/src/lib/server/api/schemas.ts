@@ -9,6 +9,7 @@ import {
 import { LANGUAGE_TAG } from "#lib/shared/languages.ts";
 import {
   MAX_BATCH_SIZE,
+  MAX_PROMPT_LENGTH,
   PROJECT_TITLE_MAX_LENGTH,
 } from "#lib/shared/limits.ts";
 import {
@@ -42,6 +43,7 @@ export const TRANSCRIPTION_OPTIONS = [
   "alignment",
   "maxLineLength",
   "batchSize",
+  "prompt",
 ] as const;
 
 export const ModelSchema = named(
@@ -204,6 +206,14 @@ export const TranscriptionRequestSchema = named(
       .max(MAX_LINE_LENGTH)
       .optional(),
     batchSize: z.number().int().min(1).max(MAX_BATCH_SIZE).optional(),
+    prompt: z
+      .string()
+      .trim()
+      .max(MAX_PROMPT_LENGTH)
+      .optional()
+      .describe(
+        "Names, terms or a sentence in the spoken language, to help with spelling.",
+      ),
   }),
 );
 

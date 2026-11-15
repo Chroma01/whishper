@@ -138,9 +138,14 @@ async def test_transcribes_every_part_and_reports_the_provider(
         ]
     )
     progress: list[tuple[float, str]] = []
+    sent: list[httpx.Request] = []
 
     async def report(fraction: float, message: str) -> None:
         progress.append((fraction, message))
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json=next(replies))
 
     artifact = await transcribe_remotely(
         TranscriptionRequest(
@@ -149,12 +154,12 @@ async def test_transcribes_every_part_and_reports_the_provider(
             runId="run",
             modelId="model-row",
             mediaPath=str(media),
-            options={"maxLineLength": 42},
+            options={"maxLineLength": 42, "prompt": " Anysub "},
         ),
         ACCESS,
         report,
         runtime=AdapterRuntimeSettings(data_root=tmp_path),
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=next(replies))),
+        transport=httpx.MockTransport(respond),
     )
 
     assert artifact.language == "es"
@@ -166,6 +171,8 @@ async def test_transcribes_every_part_and_reports_the_provider(
     assert artifact.metadata["provider"] == "OpenAI"
     assert artifact.metadata["model"] == "whisper-1"
     assert artifact.metadata["parts"] == 2
+    assert len(sent) == 2
+    assert all(b'name="prompt"\r\n\r\nAnysub\r\n' in request.content for request in sent)
     assert progress[-1][1] == "Building subtitle cues"
     assert all(earlier[0] <= later[0] for earlier, later in pairwise(progress))
 

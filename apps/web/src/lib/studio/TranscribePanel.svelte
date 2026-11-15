@@ -11,17 +11,19 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import Icon from "#lib/components/Icon.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Field from "#lib/components/ui/Field.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import { CONTROL_CLASSES } from "#lib/components/ui/variants.ts";
   import {
     MAX_LINE_LENGTH,
     MIN_LINE_LENGTH,
     type TranscriptionDefaults,
   } from "#lib/shared/instance-settings.ts";
   import { DETECT_LANGUAGE } from "#lib/shared/languages.ts";
-  import { MAX_BATCH_SIZE } from "#lib/shared/limits.ts";
+  import { MAX_BATCH_SIZE, MAX_PROMPT_LENGTH } from "#lib/shared/limits.ts";
   import { formatDuration } from "#lib/shared/format.ts";
   import {
     formatPricePerMinute,
@@ -43,6 +45,7 @@
     mediaDurationUs?: number | null;
     // Resolves to an error message when the transcription must not start.
     onbeforesubmit?: () => Promise<string | null>;
+    intro?: Snippet;
   };
 
   let {
@@ -51,7 +54,14 @@
     defaults,
     mediaDurationUs = null,
     onbeforesubmit,
+    intro,
   }: Props = $props();
+
+  // In a side panel the options scroll and the start button stays pinned to
+  // the panel's bottom. A dialog scrolls as a whole, so the button sticks.
+  const BODY_CLASSES =
+    "min-h-0 flex-1 overflow-y-auto px-4 pt-4 in-[dialog]:overflow-visible in-[dialog]:p-0";
+  const COLUMN_CLASSES = "mx-auto grid w-full max-w-md gap-4";
 
   let pickedModelKey = $state<string>();
   const defaultKey = $derived(defaultModelKey(models, defaults.model));
@@ -61,6 +71,16 @@
   );
   const accepts = (option: string) =>
     selectedModel ? acceptsOption(selectedModel.optionsSchema, option) : true;
+  const advancedOptionsSummary = $derived.by(() => {
+    const names = [
+      accepts("alignment") ? "word alignment" : null,
+      accepts("prompt") ? "prompt" : null,
+      "line length",
+      accepts("batchSize") ? "batch size" : null,
+    ].filter((name) => name !== null);
+    const list = new Intl.ListFormat("en-GB").format(names);
+    return list.charAt(0).toUpperCase() + list.slice(1);
+  });
   const remote = $derived(selectedModel?.remote ?? null);
   const estimatedCost = $derived(
     remote?.priceMicrosPerMinute != null && mediaDurationUs
@@ -100,52 +120,85 @@
 
 {#if models.length}
   <form
-    class="grid"
+    class="flex min-h-0 flex-1 flex-col"
     method="POST"
     action="?/transcribe"
     onsubmit={handleSubmit}
   >
-    <div class="grid gap-4 pb-4">
-      <ModelPicker
-        {models}
-        {hardware}
-        selectedKey={selectedModel?.key ?? ""}
-        onpick={(key) => (pickedModelKey = key)}
-      />
-      <LanguagePicker initial={defaults.language ?? DETECT_LANGUAGE} />
-      <div class="grid gap-2">
-        {#if accepts("alignment")}
-          <label class="flex cursor-pointer items-start gap-2.5">
-            <input
-              class="mt-0.5 size-4 shrink-0 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-              name="alignment"
-              type="checkbox"
-              bind:checked={alignment}
-            />
-            <span class="grid gap-0.5">
-              <span class="text-sm font-medium text-text">
-                Accurate word alignment
-              </span>
-              <span class="text-xs text-text-muted">
-                For editing, highlights and karaoke.
-              </span>
-            </span>
-          </label>
-        {/if}
-        <details class="group" ontoggle={revealAdvancedOptions}>
+    <div class={BODY_CLASSES}>
+      <div class="{COLUMN_CLASSES} pb-4">
+        {@render intro?.()}
+        <ModelPicker
+          {models}
+          {hardware}
+          selectedKey={selectedModel?.key ?? ""}
+          onpick={(key) => (pickedModelKey = key)}
+        />
+        <LanguagePicker initial={defaults.language ?? DETECT_LANGUAGE} />
+        <details
+          class="group rounded-lg border border-border"
+          ontoggle={revealAdvancedOptions}
+        >
           <summary
-            class="flex w-fit cursor-pointer list-none items-center gap-2.5 rounded-sm text-sm font-medium text-text-muted transition-colors duration-150 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+            class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3.5 py-3 transition-colors duration-150 group-open:rounded-b-none hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
           >
+            <span class="grid min-w-0 flex-1 gap-0.5">
+              <span class="text-sm font-medium text-text">Advanced options</span
+              >
+              <span class="text-xs text-text-muted"
+                >{advancedOptionsSummary}</span
+              >
+            </span>
             <span
-              class="grid size-4 place-items-center transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none"
+              class="grid size-4 shrink-0 place-items-center text-text-muted transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none"
               aria-hidden="true"
             >
-              <Icon name="chevron-right" size={16} />
+              <Icon name="chevron-down" size={16} />
             </span>
-            Advanced options
           </summary>
           <!-- The bottom scroll margin clears the pinned start button. -->
-          <div class="grid scroll-mb-18 grid-cols-2 gap-3 pt-3">
+          <div
+            class="grid scroll-mb-18 grid-cols-2 items-start gap-x-3 gap-y-4 border-t border-border p-3.5"
+          >
+            {#if accepts("alignment")}
+              <label class="col-span-2 flex cursor-pointer items-start gap-2.5">
+                <input
+                  class="mt-0.5 size-4 shrink-0 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  name="alignment"
+                  type="checkbox"
+                  bind:checked={alignment}
+                />
+                <span class="grid gap-0.5">
+                  <span class="text-sm font-medium text-text">
+                    Word alignment
+                  </span>
+                  <span class="text-sm text-text-muted">
+                    Word-level timestamps, for editing and karaoke.
+                    Transcription is faster if off.
+                  </span>
+                </span>
+              </label>
+            {/if}
+            {#if accepts("prompt")}
+              <div class="col-span-2">
+                <Field
+                  label="Prompt"
+                  hint="A sentence with names or terms to spell right, in the spoken language."
+                >
+                  {#snippet control({ id, describedBy })}
+                    <textarea
+                      {id}
+                      aria-describedby={describedBy}
+                      class="{CONTROL_CLASSES} resize-y py-2"
+                      name="prompt"
+                      rows="2"
+                      maxlength={MAX_PROMPT_LENGTH}
+                      placeholder="Dr. Okonkwo talks about Anysub and WhisperX."
+                    ></textarea>
+                  {/snippet}
+                </Field>
+              </div>
+            {/if}
             <Field label="Line length" hint="Characters per line.">
               {#snippet control({ id, describedBy })}
                 <Input
@@ -180,46 +233,55 @@
       </div>
     </div>
     <div
-      class="sticky bottom-0 grid gap-2 border-t border-border bg-surface pt-4 pb-4 in-[dialog]:bg-surface-raised in-[dialog]:pb-0"
+      class="sticky bottom-0 shrink-0 border-t border-border bg-surface p-4 in-[dialog]:bg-surface-raised in-[dialog]:px-0 in-[dialog]:pb-0"
     >
-      {#if remote}
-        <p class="flex items-start gap-1.5 text-xs text-text-muted">
-          <span class="mt-px shrink-0" aria-hidden="true">
-            <Icon name="globe" size={14} />
-          </span>
-          <span>
-            Sends the audio to {remote.providerName} at {remote.host}.
-            {#if estimatedCost !== null && mediaDurationUs !== null}
-              About {formatUsd(estimatedCost)} for {formatDuration(
-                mediaDurationUs,
-              )}.
-            {:else if remote.priceMicrosPerMinute !== null}
-              {formatPricePerMinute(remote.priceMicrosPerMinute)}.
-            {/if}
-          </span>
-        </p>
-      {/if}
-      {#if blockedMessage}
-        <p class="text-sm text-danger" role="alert">{blockedMessage}</p>
-      {/if}
-      <Button
-        variant="primary"
-        type="submit"
-        class="w-full"
-        loading={preparing}
-      >
-        <Icon name="activity" size={16} />
-        Start transcription
-      </Button>
+      <div class="mx-auto grid w-full max-w-md gap-2">
+        {#if remote}
+          <p class="flex items-start gap-1.5 text-xs text-text-muted">
+            <span class="mt-px shrink-0" aria-hidden="true">
+              <Icon name="globe" size={14} />
+            </span>
+            <span>
+              Sends the audio to {remote.providerName} at {remote.host}.
+              {#if estimatedCost !== null && mediaDurationUs !== null}
+                About {formatUsd(estimatedCost)} for {formatDuration(
+                  mediaDurationUs,
+                )}.
+              {:else if remote.priceMicrosPerMinute !== null}
+                {formatPricePerMinute(remote.priceMicrosPerMinute)}.
+              {/if}
+            </span>
+          </p>
+        {/if}
+        {#if blockedMessage}
+          <p class="text-sm text-danger" role="alert">{blockedMessage}</p>
+        {/if}
+        <Button
+          variant="primary"
+          type="submit"
+          class="w-full"
+          loading={preparing}
+        >
+          <Icon name="activity" size={16} />
+          Start transcription
+        </Button>
+      </div>
     </div>
   </form>
 {:else}
-  <div class="grid gap-3">
-    <p class="text-sm text-text-muted">
-      A transcription worker is not connected yet. Start or inspect the worker
-      container, then this page will offer its models.
-    </p>
-    <Button class="w-full" disabled>Waiting for a speech worker</Button>
-    <p class="text-xs text-text-muted">Model choices appear automatically.</p>
+  <div class={BODY_CLASSES}>
+    <div class="{COLUMN_CLASSES} pb-4">
+      {@render intro?.()}
+      <div class="grid gap-3">
+        <p class="text-sm text-text-muted">
+          A transcription worker is not connected yet. Start or inspect the
+          worker container, then this page will offer its models.
+        </p>
+        <Button class="w-full" disabled>Waiting for a speech worker</Button>
+        <p class="text-xs text-text-muted">
+          Model choices appear automatically.
+        </p>
+      </div>
+    </div>
   </div>
 {/if}

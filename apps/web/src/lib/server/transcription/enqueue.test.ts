@@ -20,6 +20,18 @@ describe("parseTranscriptionRequest", () => {
     });
   });
 
+  it("keeps a trimmed prompt and leaves out a blank one", () => {
+    expect(
+      parseTranscriptionRequest(
+        form({ model: "whisperx:small", prompt: "  Anysub, WhisperX " }),
+      ).options,
+    ).toMatchObject({ prompt: "Anysub, WhisperX" });
+    expect(
+      parseTranscriptionRequest(form({ model: "whisperx:small", prompt: " " }))
+        .options,
+    ).not.toHaveProperty("prompt");
+  });
+
   it("keeps an explicit language, alignment and batch size", () => {
     expect(
       parseTranscriptionRequest(
@@ -47,6 +59,10 @@ describe("parseTranscriptionRequest", () => {
     [
       { model: "a:b", maxLineLength: "19" },
       "Maximum line length must be between 20 and 120 characters.",
+    ],
+    [
+      { model: "a:b", prompt: "x".repeat(501) },
+      "The prompt can be at most 500 characters.",
     ],
   ])("rejects %o with a 400", (values, message) => {
     expect(() => parseTranscriptionRequest(form(values))).toThrow(

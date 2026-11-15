@@ -70,7 +70,7 @@ async def test_requests_word_and_segment_timing_with_the_api_key(audio: Path) ->
 
     api, _ = api_with(httpx.MockTransport(respond))
 
-    transcript = await api.transcribe(audio, "en")
+    transcript = await api.transcribe(audio, "en", "Anysub, WhisperX")
 
     request = seen[0]
     assert str(request.url) == "https://api.groq.test/openai/v1/audio/transcriptions"
@@ -80,6 +80,7 @@ async def test_requests_word_and_segment_timing_with_the_api_key(audio: Path) ->
     assert fields["response_format"] == ["verbose_json"]
     assert fields["timestamp_granularities[]"] == ["segment", "word"]
     assert fields["language"] == ["en"]
+    assert fields["prompt"] == ["Anysub, WhisperX"]
     assert [word.word for word in transcript.words] == ["Hello", "there."]
     assert transcript.segments[0].end == 1.5
 
@@ -98,6 +99,7 @@ async def test_sends_no_authorization_without_a_key(audio: Path) -> None:
 
     assert "authorization" not in seen[0].headers
     assert "language" not in form_fields(seen[0])
+    assert "prompt" not in form_fields(seen[0])
 
 
 async def test_rejected_key_fails_for_good_without_echoing_it(audio: Path) -> None:
