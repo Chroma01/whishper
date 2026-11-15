@@ -11,6 +11,7 @@ Anysub follows [Semantic Versioning](https://semver.org). The web and worker ima
 ### Changed
 
 - The transcribe form keeps **Start transcription** at the bottom of the panel, and word alignment moved to **Advanced options**.
+- Borders and dividers are easier to see in the dark theme.
 
 ## [4.2.0] - 2026-11-13
 
