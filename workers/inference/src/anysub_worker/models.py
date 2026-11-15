@@ -5,15 +5,15 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, WithJsonSchema, model_validator
 
-type AdapterProtocolVersion = Literal["1.0"]
-type WorkerProtocolVersion = Literal["1.0"]
+type AdapterProtocolVersion = Literal["1.1"]
+type WorkerProtocolVersion = Literal["1.1"]
 type MediaPreparationVersion = Literal["1.0"]
 type ModelCacheVersion = Literal["1.0"]
 type RemoteTranscriptionVersion = Literal["1.0"]
 type TranscriptSchemaVersion = Literal["1.0"]
 
-ADAPTER_PROTOCOL_VERSION: Final[AdapterProtocolVersion] = "1.0"
-WORKER_PROTOCOL_VERSION: Final[WorkerProtocolVersion] = "1.0"
+ADAPTER_PROTOCOL_VERSION: Final[AdapterProtocolVersion] = "1.1"
+WORKER_PROTOCOL_VERSION: Final[WorkerProtocolVersion] = "1.1"
 MEDIA_PREPARATION_VERSION: Final[MediaPreparationVersion] = "1.0"
 MODEL_CACHE_VERSION: Final[ModelCacheVersion] = "1.0"
 REMOTE_TRANSCRIPTION_VERSION: Final[RemoteTranscriptionVersion] = "1.0"
@@ -40,6 +40,8 @@ MAX_WIRE_INTEGER: Final = 2**53 - 1
 # Integers cross into JavaScript, which loses precision beyond 2**53 - 1.
 WireInt = Annotated[int, Field(ge=-MAX_WIRE_INTEGER, le=MAX_WIRE_INTEGER)]
 NonNegativeWireInt = Annotated[int, Field(ge=0, le=MAX_WIRE_INTEGER)]
+# Counts audio streams only, from 0, the way ffmpeg's "0:a:N" does.
+AudioTrack = NonNegativeWireInt
 PositiveWireInt = Annotated[int, Field(gt=0, le=MAX_WIRE_INTEGER)]
 
 # A pattern, not format: uuid, so the generated standalone validators need no format plugin.
@@ -161,6 +163,7 @@ class TranscriptionRequest(StrictModel):
     media_path: str | None = Field(default=None, alias="mediaPath")
     language: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
+    audio_track: AudioTrack = Field(default=0, alias="audioTrack")
 
 
 class WordToken(StrictModel):
@@ -237,6 +240,8 @@ class MediaProbeStream(StrictModel):
     index: NonNegativeWireInt
     type: MediaStreamType
     codec: str
+    language: str | None = None
+    title: str | None = None
     duration_us: NonNegativeWireInt | None = Field(default=None, alias="durationUs")
     bit_rate: NonNegativeWireInt | None = Field(default=None, alias="bitRate")
     audio: MediaAudioDetails | None = None
@@ -287,6 +292,7 @@ class TranscriptionJobPayload(InboundModel):
     media_path: str | None = Field(default=None, alias="mediaPath")
     language: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
+    audio_track: AudioTrack = Field(default=0, alias="audioTrack")
 
     def to_request(self, job_id: str) -> TranscriptionRequest:
         return TranscriptionRequest(
@@ -297,6 +303,7 @@ class TranscriptionJobPayload(InboundModel):
             mediaPath=self.media_path,
             language=self.language,
             options=self.options,
+            audioTrack=self.audio_track,
         )
 
 
@@ -306,6 +313,7 @@ class MediaPreparationJobPayload(InboundModel):
     source_storage_key: str = Field(alias="sourceStorageKey")
     source_filename: str = Field(alias="sourceFilename")
     source_media_type: str | None = Field(default=None, alias="sourceMediaType")
+    audio_track: AudioTrack = Field(default=0, alias="audioTrack")
 
 
 type ModelCacheAction = Literal["download", "delete"]

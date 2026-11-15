@@ -1,6 +1,6 @@
 # Model adapters
 
-Status: protocol `1.0`. The production WhisperX adapter is implemented.
+Status: protocol `1.1`. The production WhisperX adapter is implemented.
 
 Anysub workers are model-agnostic. An adapter owns the model library and converts its output into versioned Anysub artifacts. The worker owns application authentication, job leases, retries, progress delivery, and result upload.
 
@@ -13,12 +13,13 @@ Every adapter implements the small manifest-only base protocol. Capability-speci
 An adapter package must:
 
 1. Publish one entry point in the `anysub.adapters` group.
-2. Return an `AdapterManifest` using adapter protocol `1.0`.
+2. Return an `AdapterManifest` using adapter protocol `1.1`.
 3. Implement the capabilities declared by each model. The only capabilities today are `transcribe` and `align`. Diarization and translation are planned and not available.
-4. Validate model-specific options before loading expensive model state.
-5. Return normalized Anysub artifacts with integer-microsecond timestamps.
-6. Report progress without contacting the Anysub application directly.
-7. Use an adapter ID other than `remote`, which the worker reserves for [external providers](PROVIDERS.md).
+4. Transcribe the audio track in `request.audio_track`. It counts audio streams from 0, like ffmpeg's `-map 0:a:N`, and `audio_track_map` in `anysub_worker.media.tracks` returns those arguments.
+5. Validate model-specific options before loading expensive model state.
+6. Return normalized Anysub artifacts with integer-microsecond timestamps.
+7. Report progress without contacting the Anysub application directly.
+8. Use an adapter ID other than `remote`, which the worker reserves for [external providers](PROVIDERS.md).
 
 Adapters run as trusted code inside a worker. Only install packages you trust.
 

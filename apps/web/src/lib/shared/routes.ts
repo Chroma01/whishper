@@ -13,8 +13,11 @@ export function isTrackExportFormat(value: string): value is TrackExportFormat {
   return (TRACK_EXPORT_FORMATS as readonly string[]).includes(value);
 }
 
-export function projectPageUrl(projectId: string): string {
-  return `/projects/${projectId}`;
+// Without a transcript, the studio opens the newest one.
+export function projectPageUrl(projectId: string, trackId?: string): string {
+  return trackId
+    ? `/projects/${projectId}/${trackId}`
+    : `/projects/${projectId}`;
 }
 
 function projectApiUrl(projectId: string): string {
@@ -25,10 +28,6 @@ export function projectMediaUrl(projectId: string): string {
   return `${projectApiUrl(projectId)}/media`;
 }
 
-export function projectCaptionsUrl(projectId: string): string {
-  return `${projectApiUrl(projectId)}/captions.vtt`;
-}
-
 export function projectStatusUrl(projectId: string): string {
   return `${projectApiUrl(projectId)}/status`;
 }
@@ -36,8 +35,10 @@ export function projectStatusUrl(projectId: string): string {
 export function projectDerivativeUrl(
   projectId: string,
   kind: MediaDerivativeKind,
+  audioTrack = 0,
 ): string {
-  return `${projectApiUrl(projectId)}/derivatives/${kind}`;
+  const url = `${projectApiUrl(projectId)}/derivatives/${kind}`;
+  return audioTrack === 0 ? url : `${url}?audioTrack=${audioTrack}`;
 }
 
 export function trackUrl(projectId: string, trackId: string): string {

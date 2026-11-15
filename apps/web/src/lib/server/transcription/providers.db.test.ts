@@ -78,12 +78,12 @@ describe("providers", () => {
     ).toEqual(["whisper-large-v3-turbo", "whisper-large-v3"]);
   });
 
-  it("count completed transcriptions and their estimated cost", () => {
+  it("count completed transcriptions and their estimated cost", async () => {
     connectWorker(remoteWorker(true));
     const { modelId } = seedRemoteModel(6_000);
-    enqueueRemote(modelId);
-    enqueueRemote(modelId);
-    enqueueRemote(modelId);
+    await enqueueRemote(modelId);
+    await enqueueRemote(modelId);
+    await enqueueRemote(modelId);
     const [first, second] = db.select().from(transcriptionRuns).all();
     for (const run of [first, second]) {
       if (!run) throw new Error("Expected a run");

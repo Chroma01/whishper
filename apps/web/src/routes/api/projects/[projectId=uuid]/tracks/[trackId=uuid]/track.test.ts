@@ -13,10 +13,7 @@ vi.mock("#lib/server/subtitles/track-editor.ts", async (importOriginal) => ({
   updateTrackForUser,
 }));
 
-import {
-  TrackLockedByTranscription,
-  TrackRevisionConflict,
-} from "#lib/server/subtitles/track-editor.ts";
+import { TrackRevisionConflict } from "#lib/server/subtitles/track-editor.ts";
 
 import { PUT } from "./+server";
 
@@ -65,21 +62,6 @@ describe("track update route", () => {
     expect(await response.json()).toMatchObject({
       code: "revision_conflict",
       revision: 4,
-    });
-  });
-
-  it("answers 409 with the reason while a transcription is running", async () => {
-    updateTrackForUser.mockImplementation(() => {
-      throw new TrackLockedByTranscription();
-    });
-
-    const response = await callPut({ revision: 1, cues: [] });
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({
-      code: "transcription_running",
-      message:
-        "A new transcription is running for this project. Editing resumes when it finishes or is cancelled.",
     });
   });
 

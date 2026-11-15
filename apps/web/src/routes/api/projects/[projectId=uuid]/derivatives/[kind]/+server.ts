@@ -11,15 +11,17 @@ import { resolveDataPath } from "#lib/server/storage/paths.ts";
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 
-export const GET: RequestHandler = async ({ locals, params, request }) => {
+export const GET: RequestHandler = async ({ locals, params, request, url }) => {
   const user = requireUser(locals);
   const kind = params.kind;
   if (!kind || !isMediaDerivativeKind(kind)) error(404, "Derivative not found");
+  const audioTrack = url.searchParams.get("audioTrack") ?? "0";
+  if (!/^\d+$/.test(audioTrack)) error(404, "Derivative not found");
 
   const project = projectForUser(db, params.projectId, user.id);
   if (!project) error(404, "Derivative not found");
 
-  const derivative = readyDerivativeFile(project.id, kind);
+  const derivative = readyDerivativeFile(project.id, kind, Number(audioTrack));
   if (!derivative) error(404, "Derivative not found");
 
   const response = await streamMediaFile(

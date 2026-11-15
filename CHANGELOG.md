@@ -8,11 +8,22 @@ Anysub follows [Semantic Versioning](https://semver.org). The web and worker ima
 
 - A prompt under **Advanced options** when you transcribe: names and terms the model should spell the way you write them. It works with local models and with providers, and the API takes it as `prompt`.
 - LRC export, for synced lyrics in music players.
+- An **Audio track** choice when you transcribe a file with more than one, such as a film with a dub. Each transcript plays the track it came from, and an audio menu under the video plays another one for a moment. The API takes it as `audioTrack`.
+- Several transcripts per project. **New transcript** replaces **Re-transcribe** and keeps the transcript you had, and a menu above the subtitle list switches between them. You can keep editing while a new one runs. The API lists each transcript's `audioTrack`.
+- Playback speed, volume and full screen in the bar under the video, which replaces the browser's own player controls.
+- **Media details**, from the studio's title bar, shows the file's tracks and the space each prepared audio track takes, and can rebuild or remove one.
 
 ### Changed
 
 - The transcribe form keeps **Start transcription** at the bottom of the panel, and word alignment moved to **Advanced options**.
 - Borders and dividers are easier to see in the dark theme.
+- Transcripts from earlier **Re-transcribe** runs, which the studio used to hide, now show in the transcript menu, so you can open or delete them.
+- Deleting a transcript or a project asks in a dialog that names it. The studio's menu no longer lists the individual waveform, thumbnail and preview files.
+- The worker protocol is now 1.1. If you run a custom adapter image, rebuild it from the new worker image, because the application refuses workers on protocol 1.0. Adapters should transcribe the audio track a job asks for, as [Adapters](https://github.com/pluja/anysub/blob/main/docs/ADAPTERS.md) describes.
+
+### Fixed
+
+- In a file with several audio tracks, transcription could use a different track from the one the studio played.
 
 ## [4.2.0] - 2026-11-13
 

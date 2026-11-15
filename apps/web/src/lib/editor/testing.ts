@@ -10,14 +10,10 @@ export function cue(id: string, text: string): EditorCue {
   return { id, position: 0, start_us: 0, end_us: 1_000_000, text };
 }
 
-export function newEditor(
-  readOnly = () => false,
-  sourceDurationUs = 0,
-): CueEditor {
+export function newEditor(sourceDurationUs = 0): CueEditor {
   return new CueEditor({
     cues: [],
     maxLineLength: () => 42,
-    readOnly,
     transport: {
       frameDurationUs: () => 40_000,
       maxCueEndUs: () => sourceDurationUs,

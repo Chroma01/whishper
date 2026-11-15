@@ -91,6 +91,14 @@ export const TrackSummarySchema = named(
     language: z.string(),
     cueCount: z.number().int(),
     transcriptionId: z.string().nullable(),
+    audioTrack: z
+      .number()
+      .int()
+      .min(0)
+      .nullable()
+      .describe(
+        "The file's audio track the transcript came from, counting from 0. Null for transcripts made before Anysub 4.3.",
+      ),
     createdAt: timestamp,
   }),
 );
@@ -121,6 +129,25 @@ export const TrackSchema = named(
   TrackSummarySchema.extend({ cues: z.array(CueSchema) }),
 );
 
+const AudioTrackSchema = named(
+  "AudioTrack",
+  z.object({
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .describe("Counts the file's audio tracks only, from 0."),
+    codec: z.string(),
+    channels: z.number().int().nullable(),
+    channelLayout: z.string().nullable(),
+    language: z
+      .string()
+      .nullable()
+      .describe("The language the file tags the track with, such as `ja`."),
+    title: z.string().nullable(),
+  }),
+);
+
 export const ProjectSummarySchema = named(
   "ProjectSummary",
   z.object({
@@ -134,6 +161,9 @@ export const ProjectSummarySchema = named(
       upload: z.enum(UPLOAD_STATUSES).nullable(),
       preparation: z.enum(PROBE_STATES),
       error: z.string().nullable(),
+      audioTracks: z
+        .array(AudioTrackSchema)
+        .describe("Empty until media preparation has read the file."),
     }),
     latestTranscription: TranscriptionSchema.nullable(),
   }),
@@ -206,6 +236,14 @@ export const TranscriptionRequestSchema = named(
       .max(MAX_LINE_LENGTH)
       .optional(),
     batchSize: z.number().int().min(1).max(MAX_BATCH_SIZE).optional(),
+    audioTrack: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        "The audio track to transcribe, an `index` from the project's `media.audioTracks`. Defaults to the first track.",
+      ),
     prompt: z
       .string()
       .trim()

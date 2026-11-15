@@ -47,7 +47,7 @@ function connectWorker(
   ],
 ): WorkerManifest {
   const manifest: WorkerManifest = {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: randomUUID(),
     name: "local-worker",
     version: "1.0.0",
@@ -59,7 +59,7 @@ function connectWorker(
     },
     adapters: [
       {
-        protocolVersion: "1.0",
+        protocolVersion: "1.1",
         id: "whisperx",
         displayName: "WhisperX",
         version: "1.0.0",

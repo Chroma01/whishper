@@ -10,6 +10,7 @@ import { TranscriptionRequestSchema } from "#lib/server/api/schemas.ts";
 import { db } from "#lib/server/db/index.ts";
 import {
   jobs,
+  projects,
   subtitleTracks,
   transcriptionRuns,
 } from "#lib/server/db/schema.ts";
@@ -30,11 +31,11 @@ function readyProject() {
 }
 
 describe("API transcriptions", () => {
-  it("start with the server's defaults for options left out", () => {
+  it("start with the server's defaults for options left out", async () => {
     const project = readyProject();
     updateInstanceSettings({ maxLineLength: 36, language: "de" });
 
-    const run = startTranscription(project.userId, project.projectId, {
+    const run = await startTranscription(project.userId, project.projectId, {
       model: project.model,
     });
 
@@ -47,10 +48,10 @@ describe("API transcriptions", () => {
     });
   });
 
-  it("send a trimmed prompt, and leave out a blank one", () => {
+  it("send a trimmed prompt, and leave out a blank one", async () => {
     const project = readyProject();
-    const optionsFor = (prompt: string) => {
-      const run = startTranscription(
+    const optionsFor = async (prompt: string) => {
+      const run = await startTranscription(
         project.userId,
         project.projectId,
         TranscriptionRequestSchema.parse({ model: project.model, prompt }),
@@ -61,38 +62,70 @@ describe("API transcriptions", () => {
       return job.payload.options;
     };
 
-    expect(optionsFor("  Anysub, WhisperX ")).toMatchObject({
+    expect(await optionsFor("  Anysub, WhisperX ")).toMatchObject({
       prompt: "Anysub, WhisperX",
     });
-    expect(optionsFor("   ")).not.toHaveProperty("prompt");
+    expect(await optionsFor("   ")).not.toHaveProperty("prompt");
   });
 
-  it("refuse options the model does not take", () => {
+  it("transcribe the audio track asked for", async () => {
+    const project = readyProject();
+    const audio = { type: "audio", codec: "aac" };
+    db.update(projects)
+      .set({
+        mediaFilename: "source.mp4",
+        mediaProbe: {
+          streams: [
+            { index: 1, ...audio },
+            { index: 2, ...audio },
+          ],
+        },
+      })
+      .where(eq(projects.id, project.projectId))
+      .run();
+
+    const run = await startTranscription(
+      project.userId,
+      project.projectId,
+      TranscriptionRequestSchema.parse({ model: project.model, audioTrack: 1 }),
+    );
+
+    const job = db.select().from(jobs).where(eq(jobs.runId, run.id)).get();
+    expect(job?.payload).toMatchObject({ audioTrack: 1 });
+    expect(() =>
+      TranscriptionRequestSchema.parse({
+        model: project.model,
+        audioTrack: -1,
+      }),
+    ).toThrow();
+  });
+
+  it("refuse options the model does not take", async () => {
     const project = readyProject();
 
-    expect(() =>
+    await expect(
       startTranscription(project.userId, project.projectId, {
         model: project.model,
         alignment: true,
       }),
-    ).toThrow("alignment:");
+    ).rejects.toThrow("alignment:");
   });
 
-  it("refuse models no connected worker offers", () => {
+  it("refuse models no connected worker offers", async () => {
     const project = readyProject();
 
-    expect(() =>
+    await expect(
       startTranscription(project.userId, project.projectId, {
         model: "whisperx:large-v3",
       }),
-    ).toThrow("No connected worker offers that model");
+    ).rejects.toThrow("No connected worker offers that model");
   });
 
-  it("are visible to workspace members only", () => {
+  it("are visible to workspace members only", async () => {
     const project = readyProject();
     const member = seedMember(project.workspaceId, "member");
     const stranger = seedProject();
-    const run = startTranscription(member, project.projectId, {
+    const run = await startTranscription(member, project.projectId, {
       model: project.model,
     });
 
@@ -104,9 +137,9 @@ describe("API transcriptions", () => {
     ).toThrow("Project not found.");
   });
 
-  it("report their track and estimated cost once completed", () => {
+  it("report their track and estimated cost once completed", async () => {
     const project = readyProject();
-    const run = startTranscription(project.userId, project.projectId, {
+    const run = await startTranscription(project.userId, project.projectId, {
       model: project.model,
     });
     db.update(transcriptionRuns)
@@ -137,9 +170,9 @@ describe("API transcriptions", () => {
     });
   });
 
-  it("cancel only while active", () => {
+  it("cancel only while active", async () => {
     const project = readyProject();
-    const run = startTranscription(project.userId, project.projectId, {
+    const run = await startTranscription(project.userId, project.projectId, {
       model: project.model,
     });
 

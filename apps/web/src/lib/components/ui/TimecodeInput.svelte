@@ -21,7 +21,6 @@
     onerror?: (message: string | null) => void;
     invalid?: boolean;
     describedBy?: string;
-    readonly?: boolean;
     class?: string;
     onfocus?: () => void;
     onblur?: () => void;
@@ -36,7 +35,6 @@
     onerror,
     invalid = false,
     describedBy,
-    readonly = false,
     class: extra = "",
     onfocus,
     onblur,
@@ -125,7 +123,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (event.isComposing || readonly || event.altKey) return;
+    if (event.isComposing || event.altKey) return;
     const modified = event.ctrlKey || event.metaKey;
     if (event.key === "Escape") {
       revert();
@@ -153,7 +151,6 @@
   // Every native edit is cancelled and replayed on the mask, which also
   // covers virtual keyboards that send no usable keydown.
   function handleBeforeInput(event: InputEvent): void {
-    if (readonly) return;
     event.preventDefault();
     const start = input.selectionStart ?? 0;
     const end = input.selectionEnd ?? start;
@@ -175,7 +172,6 @@
 
   function handlePaste(event: ClipboardEvent): void {
     event.preventDefault();
-    if (readonly) return;
     const microseconds = parsePastedTimecode(
       event.clipboardData?.getData("text/plain") ?? "",
     );
@@ -206,7 +202,6 @@
   spellcheck="false"
   autocomplete="off"
   data-no-native-undo
-  {readonly}
   {onfocus}
   onblur={handleBlur}
   onkeydown={handleKeydown}

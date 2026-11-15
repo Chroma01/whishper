@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { beforeNavigate, refreshAll } from "$app/navigation";
+  import { applyAction, deserialize } from "$app/forms";
+  import {
+    beforeNavigate,
+    goto,
+    invalidateAll,
+    refreshAll,
+  } from "$app/navigation";
   import { pollWhileActive } from "#lib/browser/polling.svelte.ts";
+  import { discardDeletedTrackJournals } from "#lib/editor/autosave.svelte.ts";
   import { CueEditor } from "#lib/editor/editor.svelte.ts";
   import { PaneWidth } from "#lib/editor/pane-width.svelte.ts";
   import {
@@ -9,17 +16,24 @@
     type StudioCommands,
   } from "#lib/editor/shortcuts.ts";
   import { frameDurationUs } from "#lib/editor/transport.svelte.ts";
+  import { transcriptAudioTrack } from "#lib/shared/audio-tracks.ts";
   import { DEFAULT_MAX_LINE_LENGTH } from "#lib/shared/limits.ts";
   import { isRunActive, isStudioActive } from "#lib/shared/project-status.ts";
-  import { projectStatusUrl } from "#lib/shared/routes.ts";
+  import { projectPageUrl, projectStatusUrl } from "#lib/shared/routes.ts";
   import { maxCueEndUs } from "#lib/shared/source-duration.ts";
   import type { StudioData, StudioStatus } from "#lib/shared/studio-data.ts";
+  import AudioTrackMenu from "#lib/studio/AudioTrackMenu.svelte";
+  import MediaDialog from "#lib/studio/MediaDialog.svelte";
   import MediaMonitor from "#lib/studio/MediaMonitor.svelte";
   import {
+    audioTrackState,
     derivativeUrl,
     editorCues,
-    isEditingLocked,
+    finishedRun,
+    playableAudioTrack,
+    preparedAudioTracks,
     processingStateChanged,
+    unopenedTranscript,
   } from "#lib/studio/project-view.ts";
   import ShortcutGuide from "#lib/studio/ShortcutGuide.svelte";
   import StudioTitlebar from "#lib/studio/StudioTitlebar.svelte";
@@ -35,7 +49,97 @@
   let status: StudioStatus = $derived(
     polled?.loaded === data
       ? polled.status
-      : { run: data.run, preparation: data.preparation },
+      : { run: data.run, preparations: data.preparations },
+  );
+
+  // A transcript plays the audio it came from, unless the player picks
+  // another track while it is open.
+  let openTrackId = $derived(data.track?.id ?? null);
+  let transcriptTrack = $derived(
+    data.track ? (transcriptAudioTrack(data.track.metadata) ?? 0) : null,
+  );
+  let chosenAudio = $state<{
+    projectId: string;
+    trackId: string | null;
+    audioTrack: number;
+  }>();
+  let wantedAudioTrack = $derived(
+    chosenAudio?.projectId === data.project.id &&
+      chosenAudio.trackId === openTrackId
+      ? chosenAudio.audioTrack
+      : (transcriptTrack ?? 0),
+  );
+  let preparedTracks = $derived(preparedAudioTracks(data.derivatives));
+  let heard = { projectId: "", audioTrack: 0 };
+  let playingAudioTrack = $derived.by(() => {
+    const current = heard.projectId === data.project.id ? heard.audioTrack : 0;
+    const audioTrack = playableAudioTrack(
+      wantedAudioTrack,
+      current,
+      preparedTracks,
+    );
+    heard = { projectId: data.project.id, audioTrack };
+    return audioTrack;
+  });
+
+  function audioStateOf(audioTrack: number) {
+    return audioTrackState(audioTrack, preparedTracks, status.preparations);
+  }
+
+  async function prepareAudioTrack(audioTrack: number): Promise<void> {
+    const body = new FormData();
+    body.set("audioTrack", String(audioTrack));
+    const response = await fetch("?/prepareMedia", {
+      method: "POST",
+      body,
+      headers: { "x-sveltekit-action": "true" },
+    });
+    const result = deserialize(await response.text());
+    // Refreshing in place keeps focus and scroll, where following the
+    // action's redirect would navigate.
+    if (result.type === "redirect" || result.type === "success") {
+      await invalidateAll();
+    } else {
+      await applyAction(result);
+    }
+  }
+
+  function chooseAudioTrack(audioTrack: number): void {
+    chosenAudio = {
+      projectId: data.project.id,
+      trackId: openTrackId,
+      audioTrack,
+    };
+    const { kind } = audioStateOf(audioTrack);
+    if (kind === "missing" || kind === "failed") {
+      void prepareAudioTrack(audioTrack);
+    }
+  }
+
+  // An open transcript whose track has no waveform yet, such as one made
+  // before each track kept its own, gets it prepared once per visit. A failed
+  // preparation waits for the player's menu.
+  const requestedTracks = new Set<string>();
+  $effect(() => {
+    if (
+      transcriptTrack === null ||
+      data.project.mediaPreparationStatus !== "completed" ||
+      transcriptTrack >= data.project.audioTracks.length ||
+      audioStateOf(transcriptTrack).kind !== "missing"
+    ) {
+      return;
+    }
+    const key = `${data.project.id}:${transcriptTrack}`;
+    if (requestedTracks.has(key)) return;
+    requestedTracks.add(key);
+    void prepareAudioTrack(transcriptTrack);
+  });
+
+  // A run that finished while this page was open, so its transcript can be
+  // offered without taking over the one being edited.
+  let readyRunId = $state<string | null>(null);
+  let readyTrack = $derived(
+    unopenedTranscript(data.tracks, data.track?.id, readyRunId),
   );
 
   pollWhileActive(() => isStudioActive(status), 1_500, refreshStatus);
@@ -53,14 +157,21 @@
     if (!response.ok) return refreshAll();
     const next: StudioStatus = await response.json();
     if (data !== loaded) return;
-    if (processingStateChanged(status, next)) return refreshAll();
+    if (processingStateChanged(status, next)) {
+      readyRunId = finishedRun(status, next) ?? readyRunId;
+      return refreshAll();
+    }
     polled = { loaded, status: next };
   }
 
   let shortcutGuideOpen = $state(false);
   let transcribeDialogOpen = $state(false);
+  let mediaDialogOpen = $state(false);
   let hasTrackAndMedia = $derived(
     data.track !== null && data.project.hasSourceMedia,
+  );
+  let canCreateTranscript = $derived(
+    hasTrackAndMedia && !isRunActive(status.run),
   );
   let maxLineLength = $derived(
     Number(data.track?.metadata?.maxLineLength ?? DEFAULT_MAX_LINE_LENGTH),
@@ -70,7 +181,6 @@
   const editor = new CueEditor({
     cues: untrack(() => editorCues(data.cues)),
     maxLineLength: () => maxLineLength,
-    readOnly: () => isEditingLocked(data.track, status.run),
     transport: {
       frameDurationUs: () =>
         frameDurationUs(
@@ -86,7 +196,8 @@
   });
   const commands: StudioCommands = {
     transport: editor.transport,
-    isDialogOpen: () => shortcutGuideOpen || transcribeDialogOpen,
+    isDialogOpen: () =>
+      shortcutGuideOpen || transcribeDialogOpen || mediaDialogOpen,
     openGuide: () => (shortcutGuideOpen = true),
     canSave: () => data.track !== null,
     save: () => void editor.autosave.flush(),
@@ -106,6 +217,16 @@
     return editor.autosave.hasUnsavedChanges
       ? "Your latest edits could not be saved, so the transcription did not start. Try again once they are saved."
       : null;
+  }
+
+  // Both saves settle first, so neither transcript loads a copy that a save
+  // still on its way is about to replace.
+  async function openTrack(trackId: string): Promise<void> {
+    readyRunId = null;
+    if (trackId === data.track?.id) return;
+    await editor.autosave.flush();
+    await editor.leftSave(trackId);
+    await goto(projectPageUrl(data.project.id, trackId), { reset: false });
   }
 
   function onStudioKeydown(event: KeyboardEvent): void {
@@ -129,13 +250,10 @@
   });
 
   $effect(() => {
-    if (!editor.readOnly) untrack(() => editor.resumeEditing());
-  });
-
-  // Another tab started the run: reload the studio so the editor locks and
-  // follows the run.
-  $effect(() => {
-    if (editor.autosave.blockedByTranscription) untrack(() => refreshAll());
+    discardDeletedTrackJournals(
+      data.project.id,
+      data.tracks.map((track) => track.id),
+    );
   });
 
   // The dialog unmounts without closing when its track or media goes away.
@@ -180,11 +298,11 @@
   <StudioTitlebar
     project={data.project}
     track={data.track}
-    derivativeKinds={data.derivatives.map((derivative) => derivative.kind)}
     autosave={editor.autosave}
-    canRetranscribe={hasTrackAndMedia && !isRunActive(status.run)}
-    onretranscribe={() => (transcribeDialogOpen = true)}
+    {canCreateTranscript}
+    oncreatetranscript={() => (transcribeDialogOpen = true)}
     onopenshortcuts={() => (shortcutGuideOpen = true)}
+    onopenmedia={() => (mediaDialogOpen = true)}
   />
 
   {#if form?.message}
@@ -202,11 +320,22 @@
   >
     <MediaMonitor
       project={data.project}
-      track={data.track}
       derivatives={data.derivatives}
+      audioTrack={playingAudioTrack}
       {editor}
-      onmediakeydown={onStudioKeydown}
-    />
+    >
+      {#snippet audioMenu()}
+        {#if data.project.audioTracks.length > 1}
+          <AudioTrackMenu
+            audioTracks={data.project.audioTracks}
+            wanted={wantedAudioTrack}
+            {transcriptTrack}
+            stateOf={audioStateOf}
+            onchoose={chooseAudioTrack}
+          />
+        {/if}
+      {/snippet}
+    </MediaMonitor>
 
     <!-- A focusable separator is the ARIA window splitter widget, which Svelte's role table treats as static. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -230,14 +359,24 @@
     <TranscriptPanel
       {editor}
       track={data.track}
+      tracks={data.tracks}
+      {readyTrack}
       run={status.run}
-      preparation={status.preparation}
+      preparations={status.preparations}
       mediaPreparationStatus={data.project.mediaPreparationStatus}
       hasSourceMedia={data.project.hasSourceMedia}
       mediaDurationUs={data.project.mediaDurationUs}
       transcriptionModels={data.transcriptionModels}
       detectedHardware={data.detectedHardware}
       transcriptionDefaults={data.transcriptionDefaults}
+      audioTracks={data.project.audioTracks}
+      audioTrack={playingAudioTrack}
+      canDelete={data.project.canManage}
+      oncreate={canCreateTranscript
+        ? () => (transcribeDialogOpen = true)
+        : null}
+      onopentrack={openTrack}
+      ondismissready={() => (readyRunId = null)}
     />
   </div>
 
@@ -245,13 +384,16 @@
     <Timeline
       durationUs={editor.transport.sourceDurationUs}
       probeState={data.project.mediaPreparationStatus}
-      waveformUrl={derivativeUrl(data.derivatives, "waveform")}
+      waveformUrl={derivativeUrl(
+        data.derivatives,
+        "waveform",
+        playingAudioTrack,
+      )}
       cues={editor.cues}
       selectedCueId={editor.selectedCueId}
       playbackUs={editor.transport.playbackUs}
       playing={editor.transport.playing}
       seekRevision={editor.transport.seekRevision}
-      editable={!editor.readOnly}
       onseek={editor.transport.seekTo}
       onselect={(cueId) => editor.select(cueId)}
       oncommittiming={(timing, gesture) => editor.retime(timing, gesture)}
@@ -265,7 +407,16 @@
       hardware={data.detectedHardware}
       defaults={data.transcriptionDefaults}
       mediaDurationUs={data.project.mediaDurationUs}
+      audioTracks={data.project.audioTracks}
+      audioTrack={playingAudioTrack}
       onbeforesubmit={saveBeforeTranscribing}
     />
   {/if}
+  <MediaDialog
+    bind:open={mediaDialogOpen}
+    project={data.project}
+    derivatives={data.derivatives}
+    {transcriptTrack}
+    stateOf={audioStateOf}
+  />
 </div>

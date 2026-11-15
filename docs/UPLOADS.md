@@ -33,17 +33,19 @@ The original display filename stays in the database. Paths never contain a proje
 
 ## Media preparation
 
-Completing an upload queues a durable `media_prepare` job. A compatible worker reads the canonical source from the shared data mount, or downloads it through its active lease when it has no mount, probes it with FFprobe, and returns derivatives through resumable, offset-checked artifact uploads.
+Completing an upload queues a durable `media_prepare` job for the first audio track. A compatible worker reads the canonical source from the shared data mount, or downloads it through its active lease when it has no mount, probes it with FFprobe, and returns derivatives through resumable, offset-checked artifact uploads.
 
 The worker produces:
 
 - A compact, multilevel waveform JSON artifact for every source with audio.
 - A JPEG thumbnail for every source with a video stream.
-- An H.264/AAC MP4 editing proxy only when the browser cannot play the source directly or FFmpeg detects variable frame timing.
+- An H.264/AAC MP4 editing proxy only when the browser cannot play the source directly or FFmpeg detects variable frame timing. A browser plays only a file's first audio track, so any other track always gets a proxy.
 
-The database stores normalized stream metadata, integer-microsecond duration, rational frame rate, seekability, preparation status, and one record per derivative. Derivatives live under the project directory. Incomplete artifacts stay in `staging/worker-artifacts/<job-id>` until completion, failure, cancellation, or lease recovery removes them.
+The waveform and the proxy belong to one audio track. Another track gets its own `media_prepare` job when a transcript of it is made or opened, or when someone picks it in the player. Each track's job replaces only that track's waveform and proxy, plus the shared thumbnail.
 
-A member can cancel or retry the active job and delete an individual derivative without touching the source. Regeneration keeps existing ready derivatives available until the replacement commits.
+The database stores normalized stream metadata, integer-microsecond duration, rational frame rate, seekability, preparation status, and one record per derivative and audio track. The project's preparation status covers the first job, which reads the file. Later jobs report per track. Derivatives live under the project directory. Incomplete artifacts stay in `staging/worker-artifacts/<job-id>` until completion, failure, cancellation, or lease recovery removes them.
+
+A member can cancel or retry a track's active job. Someone who manages the project can remove a track's waveform and proxy without touching the source. Regeneration keeps existing ready derivatives available until the replacement commits.
 
 ## Duplicate content
 

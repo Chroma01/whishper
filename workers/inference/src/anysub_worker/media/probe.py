@@ -34,7 +34,8 @@ async def probe_source(source_path: Path) -> dict[str, Any]:
             (
                 "format=format_name,format_long_name,start_time,duration,size,bit_rate:"
                 "stream=index,codec_type,codec_name,duration,bit_rate,sample_rate,channels,"
-                "channel_layout,width,height,pix_fmt,r_frame_rate,avg_frame_rate,disposition"
+                "channel_layout,width,height,pix_fmt,r_frame_rate,avg_frame_rate,disposition:"
+                "stream_tags=language,title"
             ),
             str(source_path),
         ],
@@ -117,10 +118,15 @@ def _normalize_stream(raw: dict[str, Any]) -> MediaProbeStream | None:
                 attachedPicture=attached_picture,
             )
 
+    tags = raw.get("tags")
+    if not isinstance(tags, dict):
+        tags = {}
     return MediaProbeStream(
         index=index,
         type=stream_type,
         codec=codec,
+        language=_language_tag(tags.get("language")),
+        title=_string_or_none(tags.get("title")),
         durationUs=ffprobe_seconds_to_us(raw.get("duration")),
         bitRate=_nonnegative_int(raw.get("bit_rate")),
         audio=audio,
@@ -171,6 +177,14 @@ def _nonnegative_int(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed >= 0 else None
+
+
+# Containers mark a track without a language as "und" (undetermined).
+def _language_tag(value: object) -> str | None:
+    tag = _string_or_none(value)
+    if tag is None or tag.strip().lower() == "und":
+        return None
+    return tag.strip()
 
 
 def _string_or_none(value: object) -> str | None:

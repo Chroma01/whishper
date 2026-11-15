@@ -16,6 +16,7 @@ class FakeMediaTools:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, streams: list[dict[str, Any]]) -> None:
         self.streams = streams
         self.frame_rate_checks = 0
+        self.audio_tracks: list[tuple[str, int]] = []
         self.progress: list[tuple[float, str]] = []
         for name in (
             "probe_source",
@@ -40,8 +41,9 @@ class FakeMediaTools:
         return "variable"
 
     async def generate_waveform(
-        self, source_path: Path, output_directory: Path, duration_us: int
+        self, source_path: Path, output_directory: Path, duration_us: int, audio_track: int
     ) -> PreparedDerivative:
+        self.audio_tracks.append(("waveform", audio_track))
         return derivative("waveform", output_directory / "waveform.json")
 
     async def generate_thumbnail(
@@ -50,8 +52,13 @@ class FakeMediaTools:
         return derivative("thumbnail", output_directory / "thumbnail.jpg")
 
     async def generate_proxy(
-        self, source_path: Path, output_directory: Path, probe: MediaProbeArtifact
+        self,
+        source_path: Path,
+        output_directory: Path,
+        probe: MediaProbeArtifact,
+        audio_track: int,
     ) -> PreparedDerivative:
+        self.audio_tracks.append(("proxy", audio_track))
         return derivative("proxy", output_directory / "preview.mp4")
 
     async def ffmpeg_version(self) -> str:
@@ -69,7 +76,7 @@ async def test_video_sources_get_every_derivative_in_the_completion(
     tools = FakeMediaTools(monkeypatch, [VIDEO_STREAM, AUDIO_STREAM])
 
     prepared = await prepare.prepare_media(
-        tmp_path / "source.mp4", "source.mp4", tmp_path / "artifacts", tools.report
+        tmp_path / "source.mp4", "source.mp4", tmp_path / "artifacts", tools.report, audio_track=0
     )
 
     completion = prepared.completion
@@ -93,7 +100,7 @@ async def test_browser_playable_audio_only_gets_a_waveform(
     tools = FakeMediaTools(monkeypatch, [{**AUDIO_STREAM, "codec_name": "mp3"}])
 
     prepared = await prepare.prepare_media(
-        tmp_path / "source.mp3", "song.mp3", tmp_path / "artifacts", tools.report
+        tmp_path / "source.mp3", "song.mp3", tmp_path / "artifacts", tools.report, audio_track=0
     )
 
     assert [upload.kind for upload in prepared.completion.artifacts] == ["waveform"]
@@ -108,5 +115,38 @@ async def test_sources_without_audio_or_video_are_rejected(
 
     with pytest.raises(MediaPreparationError, match="usable audio or video"):
         await prepare.prepare_media(
-            tmp_path / "source.srt", "source.srt", tmp_path / "artifacts", tools.report
+            tmp_path / "source.srt",
+            "source.srt",
+            tmp_path / "artifacts",
+            tools.report,
+            audio_track=0,
+        )
+
+
+async def test_the_chosen_audio_track_builds_the_waveform_and_preview(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    second_audio = {**AUDIO_STREAM, "index": 2}
+    tools = FakeMediaTools(monkeypatch, [VIDEO_STREAM, AUDIO_STREAM, second_audio])
+
+    prepared = await prepare.prepare_media(
+        tmp_path / "source.mkv", "source.mkv", tmp_path / "artifacts", tools.report, audio_track=1
+    )
+
+    assert tools.audio_tracks == [("waveform", 1), ("proxy", 1)]
+    assert "audio_track" in prepared.completion.probe.proxy_reasons
+
+
+async def test_a_missing_audio_track_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tools = FakeMediaTools(monkeypatch, [VIDEO_STREAM, AUDIO_STREAM])
+
+    with pytest.raises(MediaPreparationError, match="no audio track 2"):
+        await prepare.prepare_media(
+            tmp_path / "source.mkv",
+            "source.mkv",
+            tmp_path / "artifacts",
+            tools.report,
+            audio_track=1,
         )

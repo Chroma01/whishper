@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 import httpx
 
-from ..adapter import ProgressReporter, require_shared_media
+from ..adapter import ProgressReporter, require_audio_track, require_shared_media
 from ..config import AdapterRuntimeSettings
 from ..media.probe import normalize_probe, probe_source
 from ..models import (
@@ -60,6 +60,7 @@ async def transcribe_remotely(
 
     await report(0.0, "Reading the source media")
     probe = normalize_probe(await probe_source(source))
+    require_audio_track(probe, request.audio_track)
     duration_us = probe.duration_us
     with TemporaryDirectory(prefix=WORK_DIRECTORY_PREFIX) as temporary:
         chunks = await prepare_audio_chunks(
@@ -68,6 +69,7 @@ async def transcribe_remotely(
             probe.start_us or 0,
             Path(temporary),
             progress_span(report, *AUDIO_SPAN),
+            audio_track=request.audio_track,
         )
         async with httpx.AsyncClient(transport=transport) as client:
             api = SpeechApi(access, client, sleep)

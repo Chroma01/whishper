@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import type { AudioTrack } from "#lib/shared/audio-tracks.ts";
   import type { TranscriptionDefaults } from "#lib/shared/instance-settings.ts";
   import type {
     AvailableTranscriptionModel,
@@ -13,6 +14,8 @@
     hardware: DetectedWorkerHardware[];
     defaults: TranscriptionDefaults;
     mediaDurationUs: number | null;
+    audioTracks: AudioTrack[];
+    audioTrack: number;
     onbeforesubmit: () => Promise<string | null>;
   };
 
@@ -22,16 +25,20 @@
     hardware,
     defaults,
     mediaDurationUs,
+    audioTracks,
+    audioTrack,
     onbeforesubmit,
   }: Props = $props();
 </script>
 
-<Dialog bind:open title="Re-transcribe" description={processingNote(models)}>
+<Dialog bind:open title="New transcript" description={processingNote(models)}>
   <TranscribePanel
     {models}
     {hardware}
     {defaults}
     {mediaDurationUs}
+    {audioTracks}
+    {audioTrack}
     {onbeforesubmit}
   />
 </Dialog>

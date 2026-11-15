@@ -29,7 +29,7 @@ export function answering(
 
 export function remoteWorker(remote: boolean): WorkerManifest {
   return {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: randomUUID(),
     name: remote ? "remote-worker" : "old-worker",
     version: "1.0.0",
@@ -76,12 +76,13 @@ export function seedRemoteModel(price: number | null = 6_000): {
   return { providerId, modelId: model.id };
 }
 
-export function enqueueRemote(modelId: string) {
+export async function enqueueRemote(modelId: string) {
   const project = seedProject({ mediaOriginalKey: "media/source.mp4" });
-  enqueueTranscription(project.projectId, project.userId, {
+  await enqueueTranscription(project.projectId, project.userId, {
     adapterId: REMOTE_ADAPTER_ID,
     modelId,
     language: null,
+    audioTrack: null,
     options: { alignment: true, maxLineLength: 32, batchSize: 8 },
   });
   return project;

@@ -61,6 +61,34 @@ def test_normalizes_ffprobe_output_into_the_probe_artifact() -> None:
     assert probe.frame_rate_mode == "unknown"
 
 
+def test_stream_language_and_title_tags_are_kept() -> None:
+    probe = normalize_probe(
+        {
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "tags": {"language": "jpn", "title": "Main"},
+                },
+                {
+                    "index": 1,
+                    "codec_type": "audio",
+                    "codec_name": "ac3",
+                    "tags": {"language": "und"},
+                },
+                {"index": 2, "codec_type": "audio", "codec_name": "opus", "tags": "not tags"},
+            ]
+        }
+    )
+
+    assert [(stream.language, stream.title) for stream in probe.streams] == [
+        ("jpn", "Main"),
+        (None, None),
+        (None, None),
+    ]
+
+
 def test_duration_falls_back_to_the_longest_stream() -> None:
     probe = normalize_probe(
         {

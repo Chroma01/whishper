@@ -17,6 +17,20 @@ export async function open(page, path) {
   await page.waitForLoadState("networkidle");
 }
 
+// A project opens its newest transcript, whose path extends the project's.
+async function openProject(page, path) {
+  const response = await page.goto(`${baseUrl}${path}`);
+  if (!response?.ok()) {
+    throw new Error(`${path} responded ${response?.status()}`);
+  }
+  const finalPath = new URL(page.url()).pathname;
+  if (finalPath !== path && !finalPath.startsWith(`${path}/`)) {
+    throw new Error(`${path} ended up on ${finalPath}`);
+  }
+  await page.waitForLoadState("networkidle");
+  return finalPath;
+}
+
 // A studio has a transcript when it offers the export menu.
 export async function studioPath(page, withTranscript) {
   await open(page, "/");
@@ -25,11 +39,11 @@ export async function studioPath(page, withTranscript) {
     links.map((link) => link.getAttribute("href")),
   );
   for (const path of new Set(paths)) {
-    await open(page, path);
+    const studio = await openProject(page, path);
     const exportCount = await page
       .getByRole("button", { name: "Export" })
       .count();
-    if (exportCount > 0 === withTranscript) return path;
+    if (exportCount > 0 === withTranscript) return studio;
   }
   return null;
 }

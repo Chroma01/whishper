@@ -260,12 +260,8 @@ describe("CueEditor session state", () => {
 });
 
 describe("CueEditor.setTimeToPlayhead", () => {
-  function editorAt(
-    playbackUs: number,
-    readOnly = () => false,
-    sourceDurationUs = 0,
-  ): CueEditor {
-    const editor = newEditor(readOnly, sourceDurationUs);
+  function editorAt(playbackUs: number, sourceDurationUs = 0): CueEditor {
+    const editor = newEditor(sourceDurationUs);
     editor.loadTrack(
       trackA,
       [
@@ -337,15 +333,14 @@ describe("CueEditor.setTimeToPlayhead", () => {
   });
 
   it("never sets a time past the end of the source", () => {
-    const editor = editorAt(9_000_000, () => false, 3_800_000);
+    const editor = editorAt(9_000_000, 3_800_000);
     editor.setTimeToPlayhead(1, "end_us");
 
     expect(editor.cues[1].end_us).toBe(3_800_000);
   });
 
-  it("does nothing while read-only or without a cue", () => {
-    const editor = editorAt(1_500_000, () => true);
-    editor.setTimeToPlayhead(0, "end_us");
+  it("does nothing without a cue", () => {
+    const editor = editorAt(1_500_000);
     editor.setTimeToPlayhead(-1, "end_us");
 
     expect(editor.cues[0].end_us).toBe(2_000_000);
@@ -405,7 +400,7 @@ describe("CueEditor refused splits", () => {
 
 describe("CueEditor source bound", () => {
   function editorWithSource(sourceDurationUs: number): CueEditor {
-    const editor = newEditor(() => false, sourceDurationUs);
+    const editor = newEditor(sourceDurationUs);
     editor.loadTrack(
       trackA,
       [{ ...cue("a", "first"), start_us: 8_000_000, end_us: 9_000_000 }],

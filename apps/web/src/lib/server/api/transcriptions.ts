@@ -25,11 +25,11 @@ import {
 
 // Starts a run the way the transcribe form does. Options the chosen model
 // does not take are refused instead of ignored, so a script learns at once.
-export function startTranscription(
+export async function startTranscription(
   userId: string,
   projectId: string,
   input: ApiTranscriptionRequest,
-): ApiTranscription {
+): Promise<ApiTranscription> {
   const key = parseModelKey(input.model);
   const defaults = readTranscriptionDefaults(db);
   const model = transcriptionModelChoices(
@@ -52,9 +52,10 @@ export function startTranscription(
       );
     }
   }
-  const runId = enqueueTranscription(projectId, userId, {
+  const runId = await enqueueTranscription(projectId, userId, {
     ...key,
     language: input.language === undefined ? defaults.language : input.language,
+    audioTrack: input.audioTrack ?? null,
     options: {
       alignment: input.alignment ?? defaults.alignment,
       maxLineLength: input.maxLineLength ?? defaults.maxLineLength,

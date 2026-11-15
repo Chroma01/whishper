@@ -24,7 +24,7 @@
   let { editor }: { editor: CueEditor } = $props();
 
   const saveState = $derived(editor.autosave.state);
-  const editDisabled = $derived(editor.readOnly || !editor.hasSelection);
+  const editDisabled = $derived(!editor.hasSelection);
   const selectedCue = $derived(editor.cues[editor.selectedCueIndex]);
 
   const actionGroups: ToolbarAction[][] = $derived([
@@ -62,7 +62,7 @@
       {
         label: "Insert cue",
         icon: "plus",
-        disabled: editor.readOnly,
+        disabled: false,
         run: () => editor.insertAfterSelected(),
       },
       {
@@ -125,7 +125,7 @@
           <Button
             variant="ghost"
             size="sm"
-            class="font-mono tabular-nums"
+            class="font-mono tabular-nums max-sm:px-1.5 max-sm:text-xs"
             tabindex={toolbarFocus.tabIndex(index)}
             disabled={action.disabled}
             onclick={action.run}>{action.label}</Button
@@ -163,11 +163,9 @@
         >{#if cps !== null}{` · ${cps.toFixed(1)} CPS`}{/if}
       </span>
     {/if}
-    {#if !editor.readOnly}
-      <span class="hidden min-w-0 shrink-[999] truncate @min-[34rem]:block"
-        >{shortcutLabel("save")} to save · {shortcutLabel("undo")} to undo</span
-      >
-    {/if}
+    <span class="hidden min-w-0 shrink-[999] truncate @min-[34rem]:block"
+      >{shortcutLabel("save")} to save · {shortcutLabel("undo")} to undo</span
+    >
   {/if}
 </div>
 <!-- The save status itself changes with every edit, so only these messages are
@@ -182,7 +180,7 @@
       ]}
     >
       <span class="min-w-0 py-1">{editor.autosave.message}</span>
-      {#if saveState === "error" && !editor.readOnly}
+      {#if saveState === "error"}
         <Button size="sm" onclick={() => void editor.autosave.flush()}
           >Retry</Button
         >

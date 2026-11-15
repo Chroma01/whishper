@@ -28,7 +28,6 @@
     playbackUs: number;
     playing: boolean;
     seekRevision: number;
-    editable?: boolean;
     onseek: (us: number) => void;
     onselect: (cueId: string) => void;
     oncommittiming: (timing: CueTiming, gesture: TimingGesture) => void;
@@ -43,7 +42,6 @@
     playbackUs,
     playing,
     seekRevision,
-    editable = true,
     onseek,
     onselect,
     oncommittiming,
@@ -160,19 +158,14 @@
 
   <p id={`${uid}-instructions`} class="sr-only">
     Click the timeline to seek. Drag empty space to pan. While zoomed, use the
-    mouse wheel or trackpad to pan horizontally.
-    {#if editable}
-      Dragging a cue stops at its neighbours; hold Alt to drag past them. Press
-      Escape to cancel a pointer drag.
-    {/if}
+    mouse wheel or trackpad to pan horizontally. Dragging a cue stops at its
+    neighbours; hold Alt to drag past them. Press Escape to cancel a pointer
+    drag.
   </p>
   <p id={`${uid}-cue-keys`} class="sr-only">
     Left and Right Arrow move between cues; Home and End jump to the first and
-    last cue.
-    {#if editable}
-      Alt with an arrow adjusts the cue by one millisecond, Alt and Shift by 100
-      milliseconds. Press [ or ] to focus its start or end handle.
-    {/if}
+    last cue. Alt with an arrow adjusts the cue by one millisecond, Alt and
+    Shift by 100 milliseconds. Press [ or ] to focus its start or end handle.
   </p>
   <p id={`${uid}-handle-keys`} class="sr-only">
     Alt with an arrow adjusts this edge by one millisecond, Alt and Shift by 100
@@ -221,7 +214,6 @@
             {durationUs}
             contentWidthPx={viewport.contentWidthPx}
             neighbourBounds={neighbourBounds(cues, cueIndex, durationUs)}
-            {editable}
             cueKeysId={`${uid}-cue-keys`}
             handleKeysId={`${uid}-handle-keys`}
             {onselect}

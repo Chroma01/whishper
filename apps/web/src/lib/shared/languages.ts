@@ -148,3 +148,15 @@ export function matchesLanguage(language: Language, query: string): boolean {
     language.code,
   ]);
 }
+
+function findLanguage(code: string): Language | undefined {
+  return LANGUAGES.find((language) => language.code === code);
+}
+
+export function languageName(code: string): string {
+  return findLanguage(code)?.name ?? code.toUpperCase();
+}
+
+export function languageFlag(code: string): string | null {
+  return findLanguage(code)?.flag ?? null;
+}

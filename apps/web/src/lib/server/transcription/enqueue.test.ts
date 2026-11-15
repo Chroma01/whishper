@@ -16,8 +16,17 @@ describe("parseTranscriptionRequest", () => {
       adapterId: "whisperx",
       modelId: "large-v3",
       language: null,
+      audioTrack: null,
       options: { alignment: false, maxLineLength: 42 },
     });
+  });
+
+  it("reads the chosen audio track", () => {
+    expect(
+      parseTranscriptionRequest(
+        form({ model: "whisperx:small", audioTrack: "1" }),
+      ).audioTrack,
+    ).toBe(1);
   });
 
   it("keeps a trimmed prompt and leaves out a blank one", () => {
@@ -56,6 +65,8 @@ describe("parseTranscriptionRequest", () => {
       "Choose a valid transcription language.",
     ],
     [{ model: "a:b", batchSize: "65" }, "Batch size must be between 1 and 64."],
+    [{ model: "a:b", audioTrack: "-1" }, "Choose a valid audio track."],
+    [{ model: "a:b", audioTrack: "1.5" }, "Choose a valid audio track."],
     [
       { model: "a:b", maxLineLength: "19" },
       "Maximum line length must be between 20 and 120 characters.",

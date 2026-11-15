@@ -32,7 +32,6 @@ type EditRefusal = {
 type CueEditorOptions = {
   cues: EditorCue[];
   maxLineLength: () => number;
-  readOnly?: () => boolean;
   transport: TransportOptions;
 };
 
@@ -46,8 +45,8 @@ export class CueEditor {
   readonly transport: Transport;
   readonly #options: CueEditorOptions;
   readonly #cursorPositions = new Map<string, number>();
+  readonly #leftSaves = new Map<string, Promise<void>>();
   #editedCueId: string | null = null;
-  #journalDeferred = false;
 
   selectedCueIndex = $derived(
     this.cues.findIndex((cue) => cue.id === this.selectedCueId),
@@ -75,65 +74,42 @@ export class CueEditor {
     return this.#options.maxLineLength();
   }
 
-  get readOnly(): boolean {
-    return this.#options.readOnly?.() ?? false;
-  }
-
   get canUndo(): boolean {
     return (
-      !this.readOnly &&
-      (this.history.undoStack.length > 0 ||
-        this.history.hasPendingEdit(this.cues))
+      this.history.undoStack.length > 0 ||
+      this.history.hasPendingEdit(this.cues)
     );
   }
 
   get canRedo(): boolean {
-    return !this.readOnly && this.history.redoStack.length > 0;
+    return this.history.redoStack.length > 0;
   }
 
   loadTrack(track: TrackRef | null, cues: EditorCue[], revision: number): void {
     const outgoing = this.autosave;
     if (outgoing.track?.trackId === track?.trackId) return;
-    const refusedEditsDiscarded =
-      this.#refusedEditsStranded(track) && outgoing.discardEdits();
     outgoing.dispose();
+    this.#rememberLeftSave(outgoing);
     this.autosave = new Autosave(track, revision, () => this.cues);
-    // The outgoing track's journal stays while its own pending save runs.
-    const journalsDiscarded = this.autosave.discardOtherTrackJournals(
-      outgoing.hasUnsavedChanges ? outgoing.track : null,
-    );
-    if (refusedEditsDiscarded || journalsDiscarded) {
-      this.autosave.notice =
-        "Unsaved edits to the previous transcript were discarded, because it was replaced.";
-    }
-    // Recovered edits would be stranded while a new transcription runs, so
-    // they wait in the journal until editing resumes.
-    this.#journalDeferred = this.readOnly;
-    this.#showCues(
-      (this.#journalDeferred ? null : this.autosave.recoverJournal()) ?? cues,
-    );
+    this.#showCues(this.autosave.recoverJournal() ?? cues);
   }
 
-  // Edits the server refused during a transcription can never be saved once
-  // another track of the same project replaces theirs.
-  #refusedEditsStranded(incoming: TrackRef | null): boolean {
-    const outgoing = this.autosave;
-    return (
-      incoming !== null &&
-      outgoing.track?.projectId === incoming.projectId &&
-      outgoing.blockedByTranscription
-    );
+  // Opened again before this settles, a transcript would load the copy from
+  // before its own last save, and that save would then read as a conflict.
+  leftSave(trackId: string): Promise<void> {
+    return this.#leftSaves.get(trackId) ?? Promise.resolve();
   }
 
-  // The lock lifted without a new track, so edits held back during the run
-  // can reach this track again.
-  resumeEditing(): void {
-    if (this.readOnly) return;
-    if (this.autosave.blockedByTranscription) void this.autosave.flush();
-    if (!this.#journalDeferred) return;
-    this.#journalDeferred = false;
-    const recovered = this.autosave.recoverJournal();
-    if (recovered) this.#showCues(recovered);
+  #rememberLeftSave(outgoing: Autosave): void {
+    const trackId = outgoing.track?.trackId;
+    const save = outgoing.pendingSave;
+    if (!trackId || !save) return;
+    const settled: Promise<void> = save.finally(() => {
+      if (this.#leftSaves.get(trackId) === settled) {
+        this.#leftSaves.delete(trackId);
+      }
+    });
+    this.#leftSaves.set(trackId, settled);
   }
 
   #showCues(cues: EditorCue[]): void {
@@ -178,7 +154,6 @@ export class CueEditor {
   }
 
   setText(index: number, text: string): void {
-    if (this.readOnly) return;
     this.cues[index].text = text;
     this.cues = [...this.cues];
     this.#clearSettledRefusal(this.cues[index].id);
@@ -186,7 +161,6 @@ export class CueEditor {
   }
 
   setTime(index: number, field: CueTimeField, value: number): void {
-    if (this.readOnly) return;
     const cueId = this.cues[index].id;
     this.cues = this.#retimeField(index, field, value).cues;
     this.#clearSettledRefusal(cueId);
@@ -195,7 +169,7 @@ export class CueEditor {
 
   setTimeToPlayhead(index: number, field: CueTimeField): void {
     const cue = this.cues[index];
-    if (!cue || this.readOnly) return;
+    if (!cue) return;
     const playheadUs = this.transport.clampToSource(
       this.transport.currentPlayheadUs(),
     );
@@ -239,7 +213,6 @@ export class CueEditor {
   }
 
   #apply(edit: CueEdit, coalesceKey?: string): void {
-    if (this.readOnly) return;
     // The open session becomes its own step first, so the two never overlap.
     const closed = this.history.finishEdit(this.cues);
     this.history.record(copyCues(this.cues), coalesceKey);
@@ -254,7 +227,7 @@ export class CueEditor {
 
   splitSelected(): void {
     const index = this.selectedCueIndex;
-    if (index < 0 || this.readOnly) return;
+    if (index < 0) return;
     const result = splitCue(this.cues, index, {
       playbackUs: this.transport.currentPlayheadUs(),
       cursorPosition: this.#cursorPositions.get(this.cues[index].id),
@@ -319,12 +292,10 @@ export class CueEditor {
   }
 
   undo(): void {
-    if (this.readOnly) return;
     this.#restore(this.history.undo(this.cues));
   }
 
   redo(): void {
-    if (this.readOnly) return;
     this.#restore(this.history.redo(this.cues));
   }
 

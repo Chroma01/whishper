@@ -6,7 +6,7 @@ import type { RequestHandler } from "./$types";
 export const POST: RequestHandler = (event) =>
   apiEndpoint(event, async (user) =>
     json(
-      startTranscription(
+      await startTranscription(
         user.id,
         event.params.projectId,
         await readJsonBody(event.request, TranscriptionRequestSchema),

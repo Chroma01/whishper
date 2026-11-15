@@ -33,6 +33,7 @@ from anysub_worker.timing import MICROSECONDS_PER_SECOND
 from anysub_worker.transcripts.normalize import normalize_segments
 from anysub_worker.transcripts.segments import WhisperSegment
 
+from .audio import load_audio_track
 from .cache import delete_profile, download_profile
 from .options import TranscriptionOptions, options_schema, parse_options
 from .profiles import MODEL_PROFILES, ModelProfile, find_profile
@@ -112,7 +113,7 @@ class WhisperXAdapter:
             )
 
         await report_progress(MODEL_DOWNLOAD_SPAN[1], "Loading source audio")
-        audio = await _run_in_thread(whisperx.load_audio, str(media_path))
+        audio = await load_audio_track(media_path, request.audio_track)
         try:
             return await self._transcribe_audio(whisperx, audio, request, options, report_progress)
         except asyncio.CancelledError:

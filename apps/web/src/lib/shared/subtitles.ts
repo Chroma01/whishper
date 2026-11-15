@@ -6,6 +6,17 @@ export type SubtitleTrack = {
   revision: number;
 };
 
+export type SubtitleTrackSummary = {
+  id: string;
+  name: string;
+  language: string;
+  cueCount: number;
+  runId: string | null;
+  // Null for transcripts made before Anysub recorded the audio track.
+  audioTrack: number | null;
+  createdAt: Date;
+};
+
 export type SubtitleCueSnapshot = {
   id: string;
   position: number;

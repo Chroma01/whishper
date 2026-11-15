@@ -31,7 +31,7 @@ export type WorkerJobPayload =
   TranscriptionJobPayload | MediaPreparationJobPayload | ModelCacheJobPayload;
 
 export interface WorkerManifest {
-  protocolVersion: "1.0";
+  protocolVersion: "1.1";
   workerId: string;
   name: string;
   version: string;
@@ -47,7 +47,7 @@ export interface WorkerCapabilities {
   remoteTranscription: RemoteTranscriptionVersion | null;
 }
 export interface AdapterManifest {
-  protocolVersion: "1.0";
+  protocolVersion: "1.1";
   id: string;
   displayName: string;
   version: string;
@@ -167,6 +167,8 @@ export interface MediaProbeStream {
   index: number;
   type: MediaStreamType;
   codec: string;
+  language: string | null;
+  title: string | null;
   durationUs: number | null;
   bitRate: number | null;
   audio: MediaAudioDetails | null;
@@ -230,6 +232,7 @@ export interface TranscriptionJobPayload {
   options?: {
     [k: string]: unknown;
   };
+  audioTrack?: number;
 }
 export interface MediaPreparationJobPayload {
   kind: "media_prepare";
@@ -237,6 +240,7 @@ export interface MediaPreparationJobPayload {
   sourceStorageKey: string;
   sourceFilename: string;
   sourceMediaType?: string | null;
+  audioTrack?: number;
 }
 export interface ModelCacheJobPayload {
   kind: "model_cache";
@@ -252,9 +256,9 @@ export interface RemoteModelAccess {
   model: string;
 }
 
-export const ADAPTER_PROTOCOL_VERSION = "1.0";
+export const ADAPTER_PROTOCOL_VERSION = "1.1";
 export const MEDIA_PREPARATION_VERSION = "1.0";
 export const MODEL_CACHE_VERSION = "1.0";
 export const REMOTE_TRANSCRIPTION_VERSION = "1.0";
 export const TRANSCRIPT_SCHEMA_VERSION = "1.0";
-export const WORKER_PROTOCOL_VERSION = "1.0";
+export const WORKER_PROTOCOL_VERSION = "1.1";

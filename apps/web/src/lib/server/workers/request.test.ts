@@ -103,7 +103,7 @@ describe("authenticateLeaseToken", () => {
 
 describe("authenticateWorkerManifest", () => {
   const manifest = {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
     name: "local-worker",
     version: "1.0.0",

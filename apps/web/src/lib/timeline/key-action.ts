@@ -9,7 +9,6 @@ type HandleEdge = Exclude<TimingPart, "whole">;
 
 type TimelineKeyAction =
   | { kind: "nudge"; edge: TimingPart; deltaUs: number }
-  | { kind: "block" }
   | { kind: "focus_handle"; edge: HandleEdge }
   | { kind: "return_to_body" }
   | { kind: "cancel_drag" }
@@ -24,11 +23,10 @@ const BRACKET_EDGES = new Map<string, HandleEdge>([
 ]);
 
 // Alt is the nudge modifier so plain arrows stay free for moving between
-// cues. A locked Alt+Arrow is still claimed so it never navigates history.
+// cues.
 export function timelineKeyAction(
   event: TimelineKey,
   part: TimingPart,
-  editable: boolean,
   dragging: boolean,
 ): TimelineKeyAction {
   const { key, altKey, shiftKey, ctrlKey, metaKey } = event;
@@ -37,7 +35,6 @@ export function timelineKeyAction(
   if (altKey && !ctrlKey && !metaKey) {
     const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
     if (direction !== 0) {
-      if (!editable) return { kind: "block" };
       const stepUs = shiftKey ? LARGE_NUDGE_US : NUDGE_US;
       return { kind: "nudge", edge: part, deltaUs: direction * stepUs };
     }
@@ -48,9 +45,7 @@ export function timelineKeyAction(
   const browserShortcut = metaKey || (ctrlKey && !altKey);
   const bracketEdge = BRACKET_EDGES.get(key);
   if (bracketEdge && !browserShortcut) {
-    return editable
-      ? { kind: "focus_handle", edge: bracketEdge }
-      : { kind: "none" };
+    return { kind: "focus_handle", edge: bracketEdge };
   }
 
   if (part !== "whole") {

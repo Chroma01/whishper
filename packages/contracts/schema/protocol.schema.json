@@ -14,7 +14,7 @@
       "properties": {
         "protocolVersion": {
           "$ref": "#/$defs/AdapterProtocolVersion",
-          "default": "1.0"
+          "default": "1.1"
         },
         "id": {
           "minLength": 1,
@@ -187,7 +187,7 @@
       "type": "object"
     },
     "AdapterProtocolVersion": {
-      "const": "1.0",
+      "const": "1.1",
       "type": "string"
     },
     "AdapterReference": {
@@ -518,6 +518,12 @@
             }
           ],
           "default": null
+        },
+        "audioTrack": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -640,6 +646,28 @@
         "codec": {
           "type": "string"
         },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "durationUs": {
           "anyOf": [
             {
@@ -693,6 +721,8 @@
         "index",
         "type",
         "codec",
+        "language",
+        "title",
         "durationUs",
         "bitRate",
         "audio",
@@ -1036,6 +1066,12 @@
         "options": {
           "additionalProperties": true,
           "type": "object"
+        },
+        "audioTrack": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -1297,7 +1333,7 @@
       "properties": {
         "protocolVersion": {
           "$ref": "#/$defs/WorkerProtocolVersion",
-          "default": "1.0"
+          "default": "1.1"
         },
         "workerId": {
           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
@@ -1383,7 +1419,7 @@
       "type": "object"
     },
     "WorkerProtocolVersion": {
-      "const": "1.0",
+      "const": "1.1",
       "type": "string"
     },
     "WorkerStorage": {

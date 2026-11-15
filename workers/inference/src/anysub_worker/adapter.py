@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from .errors import JobError
-from .models import AdapterManifest, TranscriptArtifact, TranscriptionRequest
+from .media.tracks import audio_stream, audio_streams
+from .models import (
+    AdapterManifest,
+    MediaProbeArtifact,
+    TranscriptArtifact,
+    TranscriptionRequest,
+)
 
 ProgressReporter = Callable[[float, str], Awaitable[None]]
 
@@ -64,3 +70,10 @@ def require_shared_media(media_path: str | None, data_root: Path) -> Path:
             f"The source media is not available at {path}.", retryable=False
         )
     return path
+
+
+def require_audio_track(probe: MediaProbeArtifact, track: int) -> None:
+    if not audio_streams(probe):
+        raise AdapterExecutionError("The file has no audio.", retryable=False)
+    if audio_stream(probe, track) is None:
+        raise AdapterExecutionError(f"The source has no audio track {track + 1}.", retryable=False)

@@ -4,7 +4,6 @@ import { cues, projects, subtitleTracks } from "#lib/server/db/schema.ts";
 import { withTransaction } from "#lib/server/db/transaction.ts";
 import { projectForUser } from "#lib/server/projects/access.ts";
 import { insertCues, listTrackCues } from "#lib/server/subtitles/cues.ts";
-import { hasActiveTranscriptionRun } from "#lib/server/transcription/active-run.ts";
 import { isRecord } from "#lib/shared/is-record.ts";
 import { maxCueEndUs } from "#lib/shared/source-duration.ts";
 import type { SubtitleCueSnapshot } from "#lib/shared/subtitles.ts";
@@ -17,14 +16,6 @@ const MAX_TOTAL_TEXT = 10_000_000;
 export class TrackRevisionConflict extends Error {
   constructor(readonly currentRevision: number) {
     super("The subtitle track changed in another editor.");
-  }
-}
-
-export class TrackLockedByTranscription extends Error {
-  constructor() {
-    super(
-      "A new transcription is running for this project. Editing resumes when it finishes or is cancelled.",
-    );
   }
 }
 
@@ -132,9 +123,6 @@ export function updateTrackForUser(
 ): number | null {
   return withTransaction((tx) => {
     if (!projectForUser(tx, projectId, userId)) return null;
-    if (hasActiveTranscriptionRun(tx, projectId)) {
-      throw new TrackLockedByTranscription();
-    }
     const track = tx
       .select({
         revision: subtitleTracks.revision,

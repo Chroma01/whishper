@@ -1,51 +1,99 @@
 <script lang="ts">
+  import { untrack, type Snippet } from "svelte";
   import Icon from "#lib/components/Icon.svelte";
-  import IconButton from "#lib/components/ui/IconButton.svelte";
   import type { CueEditor } from "#lib/editor/editor.svelte.ts";
-  import { projectCaptionsUrl, projectMediaUrl } from "#lib/shared/routes.ts";
+  import { projectMediaUrl } from "#lib/shared/routes.ts";
   import { isAudioMedia } from "#lib/shared/media.ts";
-  import { formatEditorTime } from "#lib/shared/subtitles.ts";
-  import { derivativeUrl } from "./project-view";
   import type { StudioData } from "#lib/shared/studio-data.ts";
+  import PlayerControls from "./PlayerControls.svelte";
+  import { derivativeUrl } from "./project-view";
 
   type Props = {
     project: StudioData["project"];
-    track: StudioData["track"];
     derivatives: StudioData["derivatives"];
+    // The audio track whose waveform and preview play.
+    audioTrack: number;
     editor: CueEditor;
-    onmediakeydown: (event: KeyboardEvent) => void;
+    audioMenu?: Snippet;
   };
 
-  let { project, track, derivatives, editor, onmediakeydown }: Props = $props();
+  let { project, derivatives, audioTrack, editor, audioMenu }: Props = $props();
 
   let transport = $derived(editor.transport);
-  let proxyUrl = $derived(derivativeUrl(derivatives, "proxy"));
   let thumbnailUrl = $derived(derivativeUrl(derivatives, "thumbnail"));
-  let previewUrl = $derived(proxyUrl ?? projectMediaUrl(project.id));
+  // A browser plays a file's first audio track, so the source stands in for
+  // track 1 when it needs no preview.
+  let previewUrl = $derived(
+    derivativeUrl(derivatives, "proxy", audioTrack) ??
+      projectMediaUrl(project.id),
+  );
   let isVideo = $derived(
     project.hasSourceMedia &&
       !isAudioMedia(project.mediaType, project.mediaFilename),
   );
-  let noMedia = $derived(!transport.mediaElement);
   let videoAspectRatio = $state(16 / 9);
-  let previewState = $derived(
-    proxyUrl
-      ? "Editing proxy"
-      : project.mediaPreparationStatus === "completed"
-        ? "Source prepared"
-        : editor.cues.length > 0
-          ? "Track visible"
-          : "Source stored",
-  );
+  let volume = $state(1);
+  let muted = $state(false);
+  let monitor = $state<HTMLElement>();
+  let isFullscreen = $state(false);
+
+  // Switching tracks loads another file, which starts at the beginning, so
+  // the playhead and playback carry over once it loads.
+  let resumeFrom: {
+    projectId: string;
+    seconds: number;
+    playing: boolean;
+  } | null = null;
+  $effect.pre(() => {
+    void previewUrl;
+    untrack(() => {
+      const media = transport.mediaElement;
+      if (!media || media.readyState === 0) return;
+      resumeFrom = {
+        projectId: project.id,
+        seconds: media.currentTime,
+        playing: !media.paused,
+      };
+    });
+  });
+
+  // Fullscreen is missing on iPhone.
+  let canFullscreen = $state(false);
+  $effect(() => {
+    canFullscreen = document.fullscreenEnabled;
+  });
+
+  function resumePlayback(media: HTMLMediaElement): void {
+    if (resumeFrom?.projectId !== project.id) resumeFrom = null;
+    if (!resumeFrom) return;
+    media.currentTime = resumeFrom.seconds;
+    if (resumeFrom.playing) void media.play();
+    resumeFrom = null;
+  }
+
+  function toggleFullscreen(): void {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void monitor?.requestFullscreen();
+  }
 </script>
 
+<svelte:document
+  onfullscreenchange={() =>
+    (isFullscreen = document.fullscreenElement === monitor)}
+/>
+
 <section
-  class="flex min-w-0 flex-col bg-surface lg:min-h-0"
+  bind:this={monitor}
+  class="flex min-w-0 flex-col bg-surface lg:min-h-0 {isFullscreen
+    ? 'h-dvh'
+    : ''}"
   aria-label="Subtitle preview"
 >
   <div
-    class="relative grid place-items-center overflow-hidden lg:min-h-0 lg:flex-1 {isVideo
-      ? 'aspect-video bg-black [container-type:size] lg:aspect-auto'
+    class="relative grid place-items-center overflow-hidden {isFullscreen
+      ? 'min-h-0 flex-1'
+      : 'lg:min-h-0 lg:flex-1'} {isVideo
+      ? `bg-black [container-type:size] ${isFullscreen ? '' : 'aspect-video lg:aspect-auto'}`
       : 'bg-surface-sunken py-8'}"
   >
     {#if !project.hasSourceMedia}
@@ -59,38 +107,41 @@
         <p class="text-sm">No source media is attached</p>
       </div>
     {:else if isVideo}
-      <!-- Sized to the picture so the controls and the cue overlay sit on it rather than on letterboxing. -->
+      <!-- Sized to the picture so the cue overlay sits on it rather than on letterboxing. -->
       <div
         class="relative"
         style:aspect-ratio={videoAspectRatio}
         style:width={`min(100cqw, ${videoAspectRatio * 100}cqh)`}
       >
+        <!-- The cues being edited are drawn over the picture instead of a caption track. -->
+        <!-- svelte-ignore a11y_media_has_caption -->
         <video
           bind:this={transport.mediaElement}
+          bind:volume
+          bind:muted
           class="size-full object-contain"
           onloadedmetadata={(event) => {
-            const { videoWidth, videoHeight } = event.currentTarget;
-            if (videoWidth > 0 && videoHeight > 0) {
-              videoAspectRatio = videoWidth / videoHeight;
+            const media = event.currentTarget;
+            if (media.videoWidth > 0 && media.videoHeight > 0) {
+              videoAspectRatio = media.videoWidth / media.videoHeight;
             }
+            resumePlayback(media);
           }}
-          controls
+          onclick={() => transport.togglePlayback()}
           preload="metadata"
           src={previewUrl}
           poster={thumbnailUrl ?? undefined}
-          onkeydowncapture={onmediakeydown}
           {...transport.mediaEvents}
-        >
-          <track
-            kind="captions"
-            srclang={track?.language ?? "und"}
-            label={`${track?.language ?? "Source"} captions`}
-            src={projectCaptionsUrl(project.id)}
-          />
-        </video>
+          onerror={() => {
+            resumeFrom = null;
+            transport.mediaEvents.onerror();
+          }}
+        ></video>
         {#if transport.activeCue}
           <p
-            class="pointer-events-none absolute inset-x-[10%] bottom-[max(12%,4.5rem)] text-center text-base leading-relaxed font-semibold text-white lg:text-lg"
+            class="pointer-events-none absolute inset-x-[10%] bottom-[8%] text-center leading-relaxed font-semibold text-white {isFullscreen
+              ? 'text-2xl lg:text-3xl'
+              : 'text-base lg:text-lg'}"
           >
             <span
               class="rounded bg-black/75 px-2 py-0.5 whitespace-pre-line box-decoration-clone"
@@ -112,12 +163,16 @@
         </p>
         <audio
           bind:this={transport.mediaElement}
-          class="w-full"
-          controls
+          bind:volume
+          bind:muted
           preload="metadata"
           src={previewUrl}
-          onkeydowncapture={onmediakeydown}
+          onloadedmetadata={(event) => resumePlayback(event.currentTarget)}
           {...transport.mediaEvents}
+          onerror={() => {
+            resumeFrom = null;
+            transport.mediaEvents.onerror();
+          }}
         ></audio>
         <p class="min-h-14 text-center text-base font-semibold text-text">
           <span class="whitespace-pre-line"
@@ -128,59 +183,13 @@
     {/if}
   </div>
 
-  <div
-    class="grid h-12 shrink-0 grid-cols-[auto_1fr] items-center gap-3 border-t border-border px-3 sm:grid-cols-[1fr_auto_1fr]"
-  >
-    <span class="truncate font-mono text-sm text-text tabular-nums">
-      <span class="sr-only">Playback time</span>
-      {formatEditorTime(transport.playbackUs)}
-      <span class="text-text-muted max-xl:hidden">
-        / {formatEditorTime(transport.sourceDurationUs)}
-      </span>
-    </span>
-    <div
-      class="flex items-center gap-0.5 justify-self-end sm:justify-self-auto"
-      role="group"
-      aria-label="Transport"
-    >
-      <IconButton
-        label="Previous cue"
-        icon="skip-back"
-        size="sm"
-        disabled={noMedia}
-        onclick={() => transport.jumpToCueStart(-1)}
-      />
-      <IconButton
-        label="Back one frame"
-        icon="chevron-left"
-        size="sm"
-        disabled={noMedia}
-        onclick={() => transport.stepFrames(-1, 1)}
-      />
-      <IconButton
-        label={transport.playing ? "Pause" : "Play"}
-        icon={transport.playing ? "pause" : "play"}
-        variant="secondary"
-        disabled={noMedia}
-        onclick={() => transport.togglePlayback()}
-      />
-      <IconButton
-        label="Forward one frame"
-        icon="chevron-right"
-        size="sm"
-        disabled={noMedia}
-        onclick={() => transport.stepFrames(1, 1)}
-      />
-      <IconButton
-        label="Next cue"
-        icon="skip-forward"
-        size="sm"
-        disabled={noMedia}
-        onclick={() => transport.jumpToCueStart(1)}
-      />
-    </div>
-    <span class="truncate text-right text-xs text-text-muted max-sm:hidden">
-      {previewState}
-    </span>
-  </div>
+  <PlayerControls
+    {transport}
+    bind:volume
+    bind:muted
+    fullscreen={isVideo && canFullscreen
+      ? { active: isFullscreen, toggle: toggleFullscreen }
+      : null}
+    {audioMenu}
+  />
 </section>

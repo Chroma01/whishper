@@ -38,12 +38,19 @@ function responseMessage(body: unknown): string | null {
   return typeof message === "string" && message ? message : null;
 }
 
-function isTranscriptionRunning(body: unknown): boolean {
-  return (
-    typeof body === "object" &&
-    body !== null &&
-    (body as { code?: unknown }).code === "transcription_running"
+// Edits that could not be saved wait in this browser until their transcript
+// opens again, so only the journals of deleted transcripts are removed.
+export function discardDeletedTrackJournals(
+  projectId: string,
+  trackIds: readonly string[],
+): void {
+  const projectPrefix = `${JOURNAL_PREFIX}${projectId}:`;
+  const kept = new Set(
+    trackIds.map((trackId) => journalKey({ projectId, trackId })),
   );
+  storageKeys()
+    .filter((key) => key.startsWith(projectPrefix) && !kept.has(key))
+    .forEach(removeStorage);
 }
 
 export class Autosave {
@@ -51,8 +58,6 @@ export class Autosave {
   message = $state("");
   // Unlike message, typing does not clear it, so a discard stays visible.
   notice = $state<string | null>(null);
-  // The server refused the save because a new transcription is running.
-  blockedByTranscription = $state(false);
   readonly track: TrackRef | null;
   #revision: number;
   #cues: () => readonly EditorCue[];
@@ -79,6 +84,10 @@ export class Autosave {
 
   get hasUnsavedChanges(): boolean {
     return this.#changeVersion !== this.#savedVersion;
+  }
+
+  get pendingSave(): Promise<void> | null {
+    return this.#pendingSave;
   }
 
   get #journalKey(): string {
@@ -143,14 +152,6 @@ export class Autosave {
           new TextEncoder().encode(body).length <= KEEPALIVE_BODY_LIMIT_BYTES,
       });
       const result: unknown = await response.json().catch(() => null);
-      if (response.status === 409 && isTranscriptionRunning(result)) {
-        this.state = "error";
-        this.message =
-          responseMessage(result) ?? "A new transcription is running.";
-        this.blockedByTranscription = true;
-        this.#persistJournal();
-        return false;
-      }
       if (response.status === 409) {
         this.state = "conflict";
         this.message =
@@ -167,7 +168,6 @@ export class Autosave {
         throw new Error("Save failed: the server sent an unexpected response.");
       }
       this.#revision = revision as number;
-      this.blockedByTranscription = false;
       this.message = "";
       return true;
     } catch (cause) {
@@ -176,15 +176,6 @@ export class Autosave {
       this.#persistJournal();
       return false;
     }
-  }
-
-  // Returns whether there were edits to discard.
-  discardEdits(): boolean {
-    const hadEdits = this.hasUnsavedChanges || this.#readJournal() !== null;
-    this.#savedVersion = this.#changeVersion;
-    this.#clearSaveTimer();
-    this.#clearJournal();
-    return hadEdits;
   }
 
   recoverJournal(): EditorCue[] | null {
@@ -208,19 +199,6 @@ export class Autosave {
     this.message = "Recovered unsaved changes from this browser.";
     this.#scheduleSave(RECOVERED_SAVE_DELAY_MS);
     return journal.cues;
-  }
-
-  // Only the latest track of a project is editable, so no editor will ever
-  // recover the journal of another track. Returns whether any were removed.
-  discardOtherTrackJournals(pendingSave: TrackRef | null): boolean {
-    if (!this.track) return false;
-    const projectPrefix = `${JOURNAL_PREFIX}${this.track.projectId}:`;
-    const kept = [this.#journalKey, pendingSave ? journalKey(pendingSave) : ""];
-    const orphaned = storageKeys().filter(
-      (key) => key.startsWith(projectPrefix) && !kept.includes(key),
-    );
-    orphaned.forEach(removeStorage);
-    return orphaned.length > 0;
   }
 
   dismissNotice(): void {

@@ -48,7 +48,7 @@ def probe_of(*streams: MediaProbeStream, duration_us: int = 10_000_000) -> Media
 def test_browser_playable_sources_need_no_proxy(
     filename: str, streams: tuple[MediaProbeStream, ...]
 ) -> None:
-    probe = apply_preview_policy(probe_of(*streams), filename, "constant")
+    probe = apply_preview_policy(probe_of(*streams), filename, "constant", 0)
 
     assert probe.seekable is True
     assert probe.proxy_recommended is False
@@ -69,7 +69,7 @@ def test_browser_playable_sources_need_no_proxy(
 def test_unsupported_codecs_or_containers_need_a_proxy(
     filename: str, streams: tuple[MediaProbeStream, ...]
 ) -> None:
-    probe = apply_preview_policy(probe_of(*streams), filename, "unknown")
+    probe = apply_preview_policy(probe_of(*streams), filename, "unknown", 0)
 
     assert probe.seekable is False
     assert probe.proxy_reasons == ("browser_codec_or_container",)
@@ -77,7 +77,7 @@ def test_unsupported_codecs_or_containers_need_a_proxy(
 
 
 def test_variable_frame_rate_video_needs_a_proxy_but_stays_seekable() -> None:
-    probe = apply_preview_policy(probe_of(video_stream("h264")), "clip.mp4", "variable")
+    probe = apply_preview_policy(probe_of(video_stream("h264")), "clip.mp4", "variable", 0)
 
     assert probe.seekable is True
     assert probe.proxy_reasons == ("variable_frame_rate",)
@@ -85,14 +85,14 @@ def test_variable_frame_rate_video_needs_a_proxy_but_stays_seekable() -> None:
 
 @pytest.mark.parametrize("frame_rate_mode", ["variable", "unknown"])
 def test_audio_ignores_the_frame_rate_mode(frame_rate_mode: FrameRateMode) -> None:
-    probe = apply_preview_policy(probe_of(audio_stream("mp3")), "song.mp3", frame_rate_mode)
+    probe = apply_preview_policy(probe_of(audio_stream("mp3")), "song.mp3", frame_rate_mode, 0)
 
     assert probe.proxy_reasons == ()
 
 
 def test_a_source_without_duration_cannot_be_seeked() -> None:
     probe = apply_preview_policy(
-        probe_of(audio_stream("mp3"), duration_us=0), "song.mp3", "unknown"
+        probe_of(audio_stream("mp3"), duration_us=0), "song.mp3", "unknown", 0
     )
 
     assert probe.seekable is False
@@ -107,6 +107,29 @@ def test_cover_art_does_not_count_as_video() -> None:
         video=MediaVideoDetails(width=600, height=600, attachedPicture=True),
     )
 
-    probe = apply_preview_policy(probe_of(cover, audio_stream("mp3")), "song.mp3", "variable")
+    probe = apply_preview_policy(probe_of(cover, audio_stream("mp3")), "song.mp3", "variable", 0)
 
     assert probe.proxy_reasons == ()
+
+
+def test_a_later_audio_track_needs_a_preview_built_from_it() -> None:
+    probe = apply_preview_policy(
+        probe_of(video_stream("h264"), audio_stream("aac"), audio_stream("mp3")),
+        "clip.mp4",
+        "constant",
+        1,
+    )
+
+    assert probe.proxy_recommended is True
+    assert probe.proxy_reasons == ("audio_track",)
+
+
+def test_the_chosen_audio_track_decides_whether_the_browser_can_play_it() -> None:
+    probe = apply_preview_policy(
+        probe_of(video_stream("h264"), audio_stream("aac"), audio_stream("ac3")),
+        "clip.mp4",
+        "constant",
+        1,
+    )
+
+    assert probe.proxy_reasons == ("browser_codec_or_container", "audio_track")

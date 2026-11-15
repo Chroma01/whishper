@@ -10,6 +10,7 @@ from ..models import MEDIA_PREPARATION_VERSION
 from .derivatives import PreparedDerivative, prepared_derivative
 from .errors import MediaPreparationError
 from .process import run_media_tool
+from .tracks import audio_track_map
 
 WAVEFORM_MEDIA_TYPE = "application/vnd.anysub.waveform+json"
 WAVEFORM_CHANNEL_MIX = "mono"
@@ -90,7 +91,7 @@ def build_levels(peaks: list[Peak]) -> list[dict[str, Any]]:
 
 
 async def generate_waveform(
-    source_path: Path, output_directory: Path, duration_us: int
+    source_path: Path, output_directory: Path, duration_us: int, audio_track: int
 ) -> PreparedDerivative:
     accumulator = PeakAccumulator()
     await run_media_tool(
@@ -100,8 +101,7 @@ async def generate_waveform(
             "-nostdin",
             "-i",
             str(source_path),
-            "-map",
-            "0:a:0",
+            *audio_track_map(audio_track),
             "-ac",
             "1",
             "-ar",

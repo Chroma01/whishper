@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..adapter import ProgressReporter
 from ..media.process import run_media_tool, scaled_timeout_seconds
+from ..media.tracks import audio_track_map
 from ..timing import MICROSECONDS_PER_SECOND, seconds_to_us, us_to_seconds
 
 # Ten minutes of 64 kbit/s mono MP3 is about 5 MB, well under every provider's
@@ -33,6 +34,8 @@ async def prepare_audio_chunks(
     start_us: int,
     work_directory: Path,
     report: ProgressReporter,
+    *,
+    audio_track: int,
 ) -> list[AudioChunk]:
     """Encodes the audio in parts on a timeline that starts at 0, like -ss counts.
 
@@ -41,7 +44,7 @@ async def prepare_audio_chunks(
     boundaries = [0, duration_us]
     if duration_us > CHUNK_US:
         await report(0.0, "Finding pauses to split the audio")
-        silences = await detect_silences(source, duration_us, start_us, work_directory)
+        silences = await detect_silences(source, duration_us, start_us, work_directory, audio_track)
         boundaries = plan_cuts(duration_us, silences)
 
     chunks: list[AudioChunk] = []
@@ -49,13 +52,13 @@ async def prepare_audio_chunks(
     for index, (start_us, end_us) in enumerate(spans):
         await report(index / len(spans), f"Preparing audio part {index + 1} of {len(spans)}")
         path = work_directory / f"part-{index:04d}.mp3"
-        await _encode(source, start_us, end_us, path)
+        await _encode(source, start_us, end_us, path, audio_track)
         chunks.append(AudioChunk(path=path, start_us=start_us, end_us=end_us))
     return chunks
 
 
 async def detect_silences(
-    source: Path, duration_us: int, start_us: int, work_directory: Path
+    source: Path, duration_us: int, start_us: int, work_directory: Path, audio_track: int
 ) -> list[tuple[int, int]]:
     # Relative, so the path needs no escaping inside the filter graph.
     log = "silences.txt"
@@ -65,7 +68,7 @@ async def detect_silences(
             "-hide_banner",
             "-i",
             str(source),
-            "-vn",
+            *audio_track_map(audio_track),
             "-af",
             f"{SILENCE_FILTER},ametadata=mode=print:file={log}",
             "-f",
@@ -114,11 +117,19 @@ def plan_cuts(
     return boundaries
 
 
-async def _encode(source: Path, start_us: int, end_us: int, output: Path) -> None:
+async def _encode(source: Path, start_us: int, end_us: int, output: Path, audio_track: int) -> None:
     span = ["-ss", f"{us_to_seconds(start_us):.3f}", "-i", str(source)]
     if end_us > start_us:
         span += ["-t", f"{us_to_seconds(end_us - start_us):.3f}"]
     await run_media_tool(
-        ["-nostdin", "-hide_banner", "-y", *span, *ENCODE_ARGUMENTS, str(output)],
+        [
+            "-nostdin",
+            "-hide_banner",
+            "-y",
+            *span,
+            *audio_track_map(audio_track),
+            *ENCODE_ARGUMENTS,
+            str(output),
+        ],
         scaled_timeout_seconds(end_us - start_us, 0.5, 120),
     )

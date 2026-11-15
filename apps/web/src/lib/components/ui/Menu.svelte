@@ -104,7 +104,11 @@
   function handleToggle(event: ToggleEvent) {
     if (event.newState !== "open") return;
     if (!SUPPORTS_ANCHORING) placement = fallbackPlacement();
-    focusItem("Home");
+    const checkedItem = panel.querySelector<HTMLElement>(
+      '[aria-checked="true"]',
+    );
+    if (checkedItem) checkedItem.focus();
+    else focusItem("Home");
   }
 
   function handleKeydown(event: KeyboardEvent) {

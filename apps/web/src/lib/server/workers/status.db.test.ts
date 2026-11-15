@@ -17,7 +17,7 @@ const GIB = 1024 ** 3;
 
 function connect(name: string): WorkerManifest {
   const manifest: WorkerManifest = {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: randomUUID(),
     name,
     version: "1.2.0",

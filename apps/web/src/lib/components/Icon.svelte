@@ -56,6 +56,9 @@
     server,
     gauge,
     compress,
+    expand,
+    mute,
+    "audio-lines": audioLines,
     target,
     upload,
     database,
@@ -247,6 +250,16 @@
 {/snippet}
 {#snippet compress()}
   <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+{/snippet}
+{#snippet expand()}
+  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+{/snippet}
+{#snippet audioLines()}
+  <path d="M3 10.5v3M7 7v10M11 4v16M15 8v8M19 6v12" />
+{/snippet}
+{#snippet mute()}
+  <path d="M5 10v4h3l4 3V7L8 10z" />
+  <path d="m16 10 4 4m0-4-4 4" />
 {/snippet}
 {#snippet target()}
   <circle cx="12" cy="12" r="8.5" />

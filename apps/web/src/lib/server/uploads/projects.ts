@@ -207,6 +207,7 @@ export async function completeUpload(
           workspaceId: upload.workspaceId,
           projectId: upload.projectId,
           sourceStorageKey: storageKey,
+          audioTrack: 0,
         });
       });
     } catch (cause) {

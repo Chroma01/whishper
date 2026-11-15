@@ -130,9 +130,6 @@ class StubWhisperX:
         self.languages: list[str | None] = []
         self.prompts: list[str | None] = []
 
-    def load_audio(self, path: str) -> list[float]:
-        return [0.0] * 16_000
-
     def load_model(self, model_id: str, device: str, **kwargs: Any) -> object:
         if self.load_error:
             raise self.load_error
@@ -173,8 +170,26 @@ class StubWhisperX:
         return {"segments": segments}
 
 
+def fake_audio_loading(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    tracks: list[int] = []
+
+    async def load_audio_track(source: Path, track: int) -> list[float]:
+        tracks.append(track)
+        return [0.0] * 16_000
+
+    monkeypatch.setattr(adapter_module, "load_audio_track", load_audio_track)
+    return tracks
+
+
 @pytest.fixture
-def transcribe_setup(settings: WorkerSettings, monkeypatch: pytest.MonkeyPatch) -> InstallStub:
+def loaded_tracks(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    return fake_audio_loading(monkeypatch)
+
+
+@pytest.fixture
+def transcribe_setup(
+    settings: WorkerSettings, monkeypatch: pytest.MonkeyPatch, loaded_tracks: list[int]
+) -> InstallStub:
     media = settings.runtime.data_root / "audio.wav"
     media.touch()
     write_snapshot(settings, "small")
@@ -370,6 +385,16 @@ async def test_each_run_uses_its_own_prompt_on_the_loaded_model(
     assert stub.prompts == ["Anysub, WhisperX", None, None]
 
 
+async def test_the_chosen_audio_track_is_transcribed(
+    transcribe_setup: InstallStub, loaded_tracks: list[int]
+) -> None:
+    adapter, request = transcribe_setup(StubWhisperX())
+
+    await adapter.transcribe(request.model_copy(update={"audio_track": 2}), noop_progress)
+
+    assert loaded_tracks == [2]
+
+
 async def test_a_prompt_longer_than_the_limit_is_refused(transcribe_setup: InstallStub) -> None:
     adapter, request = transcribe_setup(StubWhisperX())
 
@@ -516,6 +541,7 @@ async def test_out_of_memory_from_any_library_is_terminal(
     media = settings.runtime.data_root / "audio.wav"
     media.touch()
     write_snapshot(settings, "small")
+    fake_audio_loading(monkeypatch)
     monkeypatch.setitem(sys.modules, "whisperx", StubWhisperX(asr_error=error))
     runtime = settings.runtime.model_copy(update={"device": device})
     request = TranscriptionRequest(

@@ -18,6 +18,10 @@
   import Input from "#lib/components/ui/Input.svelte";
   import { CONTROL_CLASSES } from "#lib/components/ui/variants.ts";
   import {
+    transcriptionLanguageOf,
+    type AudioTrack,
+  } from "#lib/shared/audio-tracks.ts";
+  import {
     MAX_LINE_LENGTH,
     MIN_LINE_LENGTH,
     type TranscriptionDefaults,
@@ -35,6 +39,7 @@
     defaultModelKey,
     type DetectedWorkerHardware,
   } from "#lib/shared/transcription-models.ts";
+  import AudioTrackPicker from "./AudioTrackPicker.svelte";
   import LanguagePicker from "./LanguagePicker.svelte";
   import ModelPicker from "./ModelPicker.svelte";
 
@@ -43,6 +48,9 @@
     hardware: DetectedWorkerHardware[];
     defaults: TranscriptionDefaults;
     mediaDurationUs?: number | null;
+    audioTracks?: AudioTrack[];
+    // The track the studio plays, which a new transcript starts on.
+    audioTrack?: number;
     // Resolves to an error message when the transcription must not start.
     onbeforesubmit?: () => Promise<string | null>;
     intro?: Snippet;
@@ -53,6 +61,8 @@
     hardware,
     defaults,
     mediaDurationUs = null,
+    audioTracks = [],
+    audioTrack = 0,
     onbeforesubmit,
     intro,
   }: Props = $props();
@@ -90,6 +100,18 @@
   // Held here so the choice survives picking a remote model, which hides it.
   // svelte-ignore state_referenced_locally
   let alignment = $state(defaults.alignment);
+  // svelte-ignore state_referenced_locally
+  let language = $state(defaults.language ?? DETECT_LANGUAGE);
+  // svelte-ignore state_referenced_locally
+  let pickedAudioTrack = $state(audioTrack);
+
+  // A track tagged with a language Whisper knows sets the spoken language.
+  function pickAudioTrack(index: number): void {
+    pickedAudioTrack = index;
+    const track = audioTracks.find((candidate) => candidate.index === index);
+    const trackLanguage = track ? transcriptionLanguageOf(track) : null;
+    if (trackLanguage) language = trackLanguage;
+  }
 
   let preparing = $state(false);
   let blockedMessage = $state<string | null>(null);
@@ -128,13 +150,19 @@
     <div class={BODY_CLASSES}>
       <div class="{COLUMN_CLASSES} pb-4">
         {@render intro?.()}
+        {#if audioTracks.length > 1}
+          <AudioTrackPicker
+            tracks={audioTracks}
+            bind:value={() => pickedAudioTrack, pickAudioTrack}
+          />
+        {/if}
         <ModelPicker
           {models}
           {hardware}
           selectedKey={selectedModel?.key ?? ""}
           onpick={(key) => (pickedModelKey = key)}
         />
-        <LanguagePicker initial={defaults.language ?? DETECT_LANGUAGE} />
+        <LanguagePicker bind:value={language} />
         <details
           class="group rounded-lg border border-border"
           ontoggle={revealAdvancedOptions}

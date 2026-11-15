@@ -219,6 +219,7 @@ async def _run_media_preparation(
             payload.source_filename,
             root / "artifacts",
             progress_span(report, *MEDIA_PREPARATION_SPAN),
+            audio_track=payload.audio_track,
         )
         report_upload = progress_span(report, *MEDIA_UPLOAD_SPAN)
         for index, derivative in enumerate(prepared.derivatives):

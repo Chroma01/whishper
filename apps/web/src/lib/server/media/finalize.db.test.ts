@@ -72,7 +72,7 @@ import {
 const WAVEFORM_TYPE = "application/vnd.anysub.waveform+json";
 
 const mediaWorker: WorkerManifest = {
-  protocolVersion: "1.0",
+  protocolVersion: "1.1",
   workerId: randomUUID(),
   name: "media-worker",
   version: "1.0.0",
@@ -93,7 +93,7 @@ type SeededMediaJob = {
   payload: MediaPreparationJobPayload;
 };
 
-function seedMediaJob(): SeededMediaJob {
+function seedMediaJob(audioTrack?: number): SeededMediaJob {
   const sourceStorageKey = "originals/source.mp3";
   const project = seedProject({ mediaOriginalKey: sourceStorageKey });
   const payload: MediaPreparationJobPayload = {
@@ -101,6 +101,7 @@ function seedMediaJob(): SeededMediaJob {
     projectId: project.projectId,
     sourceStorageKey,
     sourceFilename: "source.mp3",
+    ...(audioTrack === undefined ? {} : { audioTrack }),
   };
   const job = db
     .insert(jobs)
@@ -146,6 +147,8 @@ async function stageWaveform(
           index: 0,
           type: "audio",
           codec: "mp3",
+          language: null,
+          title: null,
           durationUs: 5_000_000,
           bitRate: null,
           audio: { sampleRate: 44_100, channels: 2, channelLayout: "stereo" },
@@ -173,6 +176,7 @@ function derivatives(projectId: string) {
       kind: mediaDerivatives.kind,
       storageKey: mediaDerivatives.storageKey,
       jobId: mediaDerivatives.jobId,
+      audioTrack: mediaDerivatives.audioTrack,
     })
     .from(mediaDerivatives)
     .where(eq(mediaDerivatives.projectId, projectId))
@@ -202,7 +206,11 @@ describe("media preparation completion", () => {
     ).resolves.toBe("completed");
 
     const [derivative] = derivatives(project.projectId);
-    expect(derivative).toMatchObject({ kind: "waveform", jobId });
+    expect(derivative).toMatchObject({
+      kind: "waveform",
+      jobId,
+      audioTrack: 0,
+    });
     expect(await readStored(derivative.storageKey)).toBe("peaks");
     expect(
       db
@@ -254,6 +262,44 @@ describe("media preparation completion", () => {
     await expect(stat(resolveDataPath(previousKey))).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("records a track's waveform next to the other tracks' ones", async () => {
+    const { project, jobId, payload } = seedMediaJob(1);
+    const firstKey = derivativeStorageKey(
+      project.workspaceId,
+      project.projectId,
+      "waveform",
+      "first.json",
+    );
+    await mkdir(dirname(resolveDataPath(firstKey)), { recursive: true });
+    await writeFile(resolveDataPath(firstKey), "first");
+    db.insert(mediaDerivatives)
+      .values({
+        projectId: project.projectId,
+        kind: "waveform",
+        storageKey: firstKey,
+        sourceStorageKey: payload.sourceStorageKey,
+        mediaType: WAVEFORM_TYPE,
+        sizeBytes: 5,
+        schemaVersion: "1.0",
+        generatorVersion: "1.0",
+      })
+      .run();
+    const leased = await lease();
+
+    await completeJob(
+      jobId,
+      leased.leaseToken,
+      await stageWaveform(leased, "second"),
+    );
+
+    expect(
+      derivatives(project.projectId)
+        .map(({ audioTrack }) => audioTrack)
+        .sort(),
+    ).toEqual([0, 1]);
+    expect(await readStored(firstKey)).toBe("first");
   });
 
   it("removes the linked files when the lease ends before they are recorded", async () => {

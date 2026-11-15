@@ -140,7 +140,6 @@
       describedBy={invalid
         ? `${timecodeHintId} ${CUE_TIME_ERROR_ID}`
         : timecodeHintId}
-      readonly={editor.readOnly}
       onfocus={() => editor.beginEdit(cue.id)}
       onblur={() => editor.finishEdit()}
     />
@@ -151,7 +150,6 @@
       shortcut={shortcutLabel(shortcut)}
       aria-keyshortcuts={shortcutAriaKeys(shortcut)}
       class={selected ? undefined : "invisible"}
-      disabled={editor.readOnly}
       onclick={(event) =>
         setCueTimeToPlayhead(event.currentTarget, cue.id, field)}
     />
@@ -162,10 +160,8 @@
   <div class="grid content-start justify-items-start gap-2 px-5 py-6">
     <h3 class="text-sm font-semibold text-text">This track has no cues</h3>
     <p class="text-sm text-text-muted">Insert a cue to continue editing.</p>
-    <Button
-      size="sm"
-      disabled={editor.readOnly}
-      onclick={() => editor.insertAfterSelected()}>Insert first cue</Button
+    <Button size="sm" onclick={() => editor.insertAfterSelected()}
+      >Insert first cue</Button
     >
   </div>
 {:else}
@@ -242,7 +238,6 @@
             onclick={(event) => rememberCursor(cue.id, event)}
             onkeyup={(event) => rememberCursor(cue.id, event)}
             onblur={() => editor.finishEdit()}
-            readonly={editor.readOnly}
             spellcheck="true"
           ></textarea>
           {#if issues.length}

@@ -6,7 +6,7 @@ export const validateWorkerManifest = validate154;
 const schema20 = {
   additionalProperties: false,
   properties: {
-    protocolVersion: { $ref: "#/$defs/WorkerProtocolVersion", default: "1.0" },
+    protocolVersion: { $ref: "#/$defs/WorkerProtocolVersion", default: "1.1" },
     workerId: {
       pattern:
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
@@ -45,7 +45,7 @@ const schema20 = {
   type: "object",
 };
 const func1 = Object.prototype.hasOwnProperty;
-const schema21 = { const: "1.0", type: "string" };
+const schema21 = { const: "1.1", type: "string" };
 function validate54(
   data,
   {
@@ -80,12 +80,12 @@ function validate54(
     }
     errors++;
   }
-  if ("1.0" !== data) {
+  if ("1.1" !== data) {
     const err1 = {
       instancePath,
       schemaPath: "#/const",
       keyword: "const",
-      params: { allowedValue: "1.0" },
+      params: { allowedValue: "1.1" },
       message: "must be equal to constant",
     };
     if (vErrors === null) {
@@ -588,7 +588,7 @@ validate56.evaluated = {
 const schema26 = {
   additionalProperties: false,
   properties: {
-    protocolVersion: { $ref: "#/$defs/AdapterProtocolVersion", default: "1.0" },
+    protocolVersion: { $ref: "#/$defs/AdapterProtocolVersion", default: "1.1" },
     id: { minLength: 1, pattern: "^[a-z0-9][a-z0-9._-]*$", type: "string" },
     displayName: { minLength: 1, type: "string" },
     version: { minLength: 1, type: "string" },
@@ -609,7 +609,7 @@ const schema26 = {
   title: "AdapterManifest",
   type: "object",
 };
-const schema27 = { const: "1.0", type: "string" };
+const schema27 = { const: "1.1", type: "string" };
 function validate65(
   data,
   {
@@ -644,12 +644,12 @@ function validate65(
     }
     errors++;
   }
-  if ("1.0" !== data) {
+  if ("1.1" !== data) {
     const err1 = {
       instancePath,
       schemaPath: "#/const",
       keyword: "const",
-      params: { allowedValue: "1.0" },
+      params: { allowedValue: "1.1" },
       message: "must be equal to constant",
     };
     if (vErrors === null) {
@@ -6232,6 +6232,8 @@ const schema51 = {
     index: { maximum: 9007199254740991, minimum: 0, type: "integer" },
     type: { $ref: "#/$defs/MediaStreamType" },
     codec: { type: "string" },
+    language: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
+    title: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
     durationUs: {
       anyOf: [
         { maximum: 9007199254740991, minimum: 0, type: "integer" },
@@ -6259,6 +6261,8 @@ const schema51 = {
     "index",
     "type",
     "codec",
+    "language",
+    "title",
     "durationUs",
     "bitRate",
     "audio",
@@ -7527,13 +7531,13 @@ function validate112(
       }
       errors++;
     }
-    if (data.durationUs === undefined) {
+    if (data.language === undefined) {
       const err3 = {
         instancePath,
         schemaPath: "#/required",
         keyword: "required",
-        params: { missingProperty: "durationUs" },
-        message: "must have required property '" + "durationUs" + "'",
+        params: { missingProperty: "language" },
+        message: "must have required property '" + "language" + "'",
       };
       if (vErrors === null) {
         vErrors = [err3];
@@ -7542,13 +7546,13 @@ function validate112(
       }
       errors++;
     }
-    if (data.bitRate === undefined) {
+    if (data.title === undefined) {
       const err4 = {
         instancePath,
         schemaPath: "#/required",
         keyword: "required",
-        params: { missingProperty: "bitRate" },
-        message: "must have required property '" + "bitRate" + "'",
+        params: { missingProperty: "title" },
+        message: "must have required property '" + "title" + "'",
       };
       if (vErrors === null) {
         vErrors = [err4];
@@ -7557,13 +7561,13 @@ function validate112(
       }
       errors++;
     }
-    if (data.audio === undefined) {
+    if (data.durationUs === undefined) {
       const err5 = {
         instancePath,
         schemaPath: "#/required",
         keyword: "required",
-        params: { missingProperty: "audio" },
-        message: "must have required property '" + "audio" + "'",
+        params: { missingProperty: "durationUs" },
+        message: "must have required property '" + "durationUs" + "'",
       };
       if (vErrors === null) {
         vErrors = [err5];
@@ -7572,13 +7576,13 @@ function validate112(
       }
       errors++;
     }
-    if (data.video === undefined) {
+    if (data.bitRate === undefined) {
       const err6 = {
         instancePath,
         schemaPath: "#/required",
         keyword: "required",
-        params: { missingProperty: "video" },
-        message: "must have required property '" + "video" + "'",
+        params: { missingProperty: "bitRate" },
+        message: "must have required property '" + "bitRate" + "'",
       };
       if (vErrors === null) {
         vErrors = [err6];
@@ -7587,17 +7591,39 @@ function validate112(
       }
       errors++;
     }
+    if (data.audio === undefined) {
+      const err7 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "audio" },
+        message: "must have required property '" + "audio" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err7];
+      } else {
+        vErrors.push(err7);
+      }
+      errors++;
+    }
+    if (data.video === undefined) {
+      const err8 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "video" },
+        message: "must have required property '" + "video" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err8];
+      } else {
+        vErrors.push(err8);
+      }
+      errors++;
+    }
     for (const key0 in data) {
-      if (!(
-        key0 === "index" ||
-        key0 === "type" ||
-        key0 === "codec" ||
-        key0 === "durationUs" ||
-        key0 === "bitRate" ||
-        key0 === "audio" ||
-        key0 === "video"
-      )) {
-        const err7 = {
+      if (!func1.call(schema51.properties, key0)) {
+        const err9 = {
           instancePath,
           schemaPath: "#/additionalProperties",
           keyword: "additionalProperties",
@@ -7605,9 +7631,9 @@ function validate112(
           message: "must NOT have additional properties",
         };
         if (vErrors === null) {
-          vErrors = [err7];
+          vErrors = [err9];
         } else {
-          vErrors.push(err7);
+          vErrors.push(err9);
         }
         errors++;
       }
@@ -7620,7 +7646,7 @@ function validate112(
         !isNaN(data0) &&
         isFinite(data0)
       )) {
-        const err8 = {
+        const err10 = {
           instancePath: instancePath + "/index",
           schemaPath: "#/properties/index/type",
           keyword: "type",
@@ -7628,15 +7654,15 @@ function validate112(
           message: "must be integer",
         };
         if (vErrors === null) {
-          vErrors = [err8];
+          vErrors = [err10];
         } else {
-          vErrors.push(err8);
+          vErrors.push(err10);
         }
         errors++;
       }
       if (typeof data0 == "number" && isFinite(data0)) {
         if (data0 > 9007199254740991 || isNaN(data0)) {
-          const err9 = {
+          const err11 = {
             instancePath: instancePath + "/index",
             schemaPath: "#/properties/index/maximum",
             keyword: "maximum",
@@ -7644,14 +7670,14 @@ function validate112(
             message: "must be <= 9007199254740991",
           };
           if (vErrors === null) {
-            vErrors = [err9];
+            vErrors = [err11];
           } else {
-            vErrors.push(err9);
+            vErrors.push(err11);
           }
           errors++;
         }
         if (data0 < 0 || isNaN(data0)) {
-          const err10 = {
+          const err12 = {
             instancePath: instancePath + "/index",
             schemaPath: "#/properties/index/minimum",
             keyword: "minimum",
@@ -7659,9 +7685,9 @@ function validate112(
             message: "must be >= 0",
           };
           if (vErrors === null) {
-            vErrors = [err10];
+            vErrors = [err12];
           } else {
-            vErrors.push(err10);
+            vErrors.push(err12);
           }
           errors++;
         }
@@ -7686,7 +7712,7 @@ function validate112(
     }
     if (data.codec !== undefined) {
       if (typeof data.codec !== "string") {
-        const err11 = {
+        const err13 = {
           instancePath: instancePath + "/codec",
           schemaPath: "#/properties/codec/type",
           keyword: "type",
@@ -7694,77 +7720,40 @@ function validate112(
           message: "must be string",
         };
         if (vErrors === null) {
-          vErrors = [err11];
+          vErrors = [err13];
         } else {
-          vErrors.push(err11);
+          vErrors.push(err13);
         }
         errors++;
       }
     }
-    if (data.durationUs !== undefined) {
-      let data3 = data.durationUs;
+    if (data.language !== undefined) {
+      let data3 = data.language;
       const _errs8 = errors;
       let valid1 = false;
       const _errs9 = errors;
-      if (!(
-        typeof data3 == "number" &&
-        !(data3 % 1) &&
-        !isNaN(data3) &&
-        isFinite(data3)
-      )) {
-        const err12 = {
-          instancePath: instancePath + "/durationUs",
-          schemaPath: "#/properties/durationUs/anyOf/0/type",
+      if (typeof data3 !== "string") {
+        const err14 = {
+          instancePath: instancePath + "/language",
+          schemaPath: "#/properties/language/anyOf/0/type",
           keyword: "type",
-          params: { type: "integer" },
-          message: "must be integer",
+          params: { type: "string" },
+          message: "must be string",
         };
         if (vErrors === null) {
-          vErrors = [err12];
+          vErrors = [err14];
         } else {
-          vErrors.push(err12);
+          vErrors.push(err14);
         }
         errors++;
-      }
-      if (typeof data3 == "number" && isFinite(data3)) {
-        if (data3 > 9007199254740991 || isNaN(data3)) {
-          const err13 = {
-            instancePath: instancePath + "/durationUs",
-            schemaPath: "#/properties/durationUs/anyOf/0/maximum",
-            keyword: "maximum",
-            params: { comparison: "<=", limit: 9007199254740991 },
-            message: "must be <= 9007199254740991",
-          };
-          if (vErrors === null) {
-            vErrors = [err13];
-          } else {
-            vErrors.push(err13);
-          }
-          errors++;
-        }
-        if (data3 < 0 || isNaN(data3)) {
-          const err14 = {
-            instancePath: instancePath + "/durationUs",
-            schemaPath: "#/properties/durationUs/anyOf/0/minimum",
-            keyword: "minimum",
-            params: { comparison: ">=", limit: 0 },
-            message: "must be >= 0",
-          };
-          if (vErrors === null) {
-            vErrors = [err14];
-          } else {
-            vErrors.push(err14);
-          }
-          errors++;
-        }
       }
       var _valid0 = _errs9 === errors;
       valid1 = valid1 || _valid0;
       const _errs11 = errors;
       if (data3 !== null) {
         const err15 = {
-          instancePath: instancePath + "/durationUs",
-          schemaPath: "#/properties/durationUs/anyOf/1/type",
+          instancePath: instancePath + "/language",
+          schemaPath: "#/properties/language/anyOf/1/type",
           keyword: "type",
           params: { type: "null" },
           message: "must be null",
@@ -7780,8 +7769,8 @@ function validate112(
       valid1 = valid1 || _valid0;
       if (!valid1) {
         const err16 = {
-          instancePath: instancePath + "/durationUs",
-          schemaPath: "#/properties/durationUs/anyOf",
+          instancePath: instancePath + "/language",
+          schemaPath: "#/properties/language/anyOf",
           keyword: "anyOf",
           params: {},
           message: "must match a schema in anyOf",
@@ -7803,23 +7792,18 @@ function validate112(
         }
       }
     }
-    if (data.bitRate !== undefined) {
-      let data4 = data.bitRate;
+    if (data.title !== undefined) {
+      let data4 = data.title;
       const _errs14 = errors;
       let valid2 = false;
       const _errs15 = errors;
-      if (!(
-        typeof data4 == "number" &&
-        !(data4 % 1) &&
-        !isNaN(data4) &&
-        isFinite(data4)
-      )) {
+      if (typeof data4 !== "string") {
         const err17 = {
-          instancePath: instancePath + "/bitRate",
-          schemaPath: "#/properties/bitRate/anyOf/0/type",
+          instancePath: instancePath + "/title",
+          schemaPath: "#/properties/title/anyOf/0/type",
           keyword: "type",
-          params: { type: "integer" },
-          message: "must be integer",
+          params: { type: "string" },
+          message: "must be string",
         };
         if (vErrors === null) {
           vErrors = [err17];
@@ -7828,70 +7812,38 @@ function validate112(
         }
         errors++;
       }
-      if (typeof data4 == "number" && isFinite(data4)) {
-        if (data4 > 9007199254740991 || isNaN(data4)) {
-          const err18 = {
-            instancePath: instancePath + "/bitRate",
-            schemaPath: "#/properties/bitRate/anyOf/0/maximum",
-            keyword: "maximum",
-            params: { comparison: "<=", limit: 9007199254740991 },
-            message: "must be <= 9007199254740991",
-          };
-          if (vErrors === null) {
-            vErrors = [err18];
-          } else {
-            vErrors.push(err18);
-          }
-          errors++;
-        }
-        if (data4 < 0 || isNaN(data4)) {
-          const err19 = {
-            instancePath: instancePath + "/bitRate",
-            schemaPath: "#/properties/bitRate/anyOf/0/minimum",
-            keyword: "minimum",
-            params: { comparison: ">=", limit: 0 },
-            message: "must be >= 0",
-          };
-          if (vErrors === null) {
-            vErrors = [err19];
-          } else {
-            vErrors.push(err19);
-          }
-          errors++;
-        }
-      }
       var _valid1 = _errs15 === errors;
       valid2 = valid2 || _valid1;
       const _errs17 = errors;
       if (data4 !== null) {
-        const err20 = {
-          instancePath: instancePath + "/bitRate",
-          schemaPath: "#/properties/bitRate/anyOf/1/type",
+        const err18 = {
+          instancePath: instancePath + "/title",
+          schemaPath: "#/properties/title/anyOf/1/type",
           keyword: "type",
           params: { type: "null" },
           message: "must be null",
         };
         if (vErrors === null) {
-          vErrors = [err20];
+          vErrors = [err18];
         } else {
-          vErrors.push(err20);
+          vErrors.push(err18);
         }
         errors++;
       }
       var _valid1 = _errs17 === errors;
       valid2 = valid2 || _valid1;
       if (!valid2) {
-        const err21 = {
-          instancePath: instancePath + "/bitRate",
-          schemaPath: "#/properties/bitRate/anyOf",
+        const err19 = {
+          instancePath: instancePath + "/title",
+          schemaPath: "#/properties/title/anyOf",
           keyword: "anyOf",
           params: {},
           message: "must match a schema in anyOf",
         };
         if (vErrors === null) {
-          vErrors = [err21];
+          vErrors = [err19];
         } else {
-          vErrors.push(err21);
+          vErrors.push(err19);
         }
         errors++;
       } else {
@@ -7905,58 +7857,95 @@ function validate112(
         }
       }
     }
-    if (data.audio !== undefined) {
-      let data5 = data.audio;
+    if (data.durationUs !== undefined) {
+      let data5 = data.durationUs;
       const _errs20 = errors;
       let valid3 = false;
       const _errs21 = errors;
-      if (
-        !validate115(data5, {
-          instancePath: instancePath + "/audio",
-          parentData: data,
-          parentDataProperty: "audio",
-          rootData,
-          dynamicAnchors,
-        })
-      ) {
-        vErrors =
-          vErrors === null
-            ? validate115.errors
-            : vErrors.concat(validate115.errors);
-        errors = vErrors.length;
+      if (!(
+        typeof data5 == "number" &&
+        !(data5 % 1) &&
+        !isNaN(data5) &&
+        isFinite(data5)
+      )) {
+        const err20 = {
+          instancePath: instancePath + "/durationUs",
+          schemaPath: "#/properties/durationUs/anyOf/0/type",
+          keyword: "type",
+          params: { type: "integer" },
+          message: "must be integer",
+        };
+        if (vErrors === null) {
+          vErrors = [err20];
+        } else {
+          vErrors.push(err20);
+        }
+        errors++;
+      }
+      if (typeof data5 == "number" && isFinite(data5)) {
+        if (data5 > 9007199254740991 || isNaN(data5)) {
+          const err21 = {
+            instancePath: instancePath + "/durationUs",
+            schemaPath: "#/properties/durationUs/anyOf/0/maximum",
+            keyword: "maximum",
+            params: { comparison: "<=", limit: 9007199254740991 },
+            message: "must be <= 9007199254740991",
+          };
+          if (vErrors === null) {
+            vErrors = [err21];
+          } else {
+            vErrors.push(err21);
+          }
+          errors++;
+        }
+        if (data5 < 0 || isNaN(data5)) {
+          const err22 = {
+            instancePath: instancePath + "/durationUs",
+            schemaPath: "#/properties/durationUs/anyOf/0/minimum",
+            keyword: "minimum",
+            params: { comparison: ">=", limit: 0 },
+            message: "must be >= 0",
+          };
+          if (vErrors === null) {
+            vErrors = [err22];
+          } else {
+            vErrors.push(err22);
+          }
+          errors++;
+        }
       }
       var _valid2 = _errs21 === errors;
       valid3 = valid3 || _valid2;
-      const _errs22 = errors;
+      const _errs23 = errors;
       if (data5 !== null) {
-        const err22 = {
-          instancePath: instancePath + "/audio",
-          schemaPath: "#/properties/audio/anyOf/1/type",
+        const err23 = {
+          instancePath: instancePath + "/durationUs",
+          schemaPath: "#/properties/durationUs/anyOf/1/type",
           keyword: "type",
           params: { type: "null" },
           message: "must be null",
         };
         if (vErrors === null) {
-          vErrors = [err22];
+          vErrors = [err23];
         } else {
-          vErrors.push(err22);
+          vErrors.push(err23);
         }
         errors++;
       }
-      var _valid2 = _errs22 === errors;
+      var _valid2 = _errs23 === errors;
       valid3 = valid3 || _valid2;
       if (!valid3) {
-        const err23 = {
-          instancePath: instancePath + "/audio",
-          schemaPath: "#/properties/audio/anyOf",
+        const err24 = {
+          instancePath: instancePath + "/durationUs",
+          schemaPath: "#/properties/durationUs/anyOf",
           keyword: "anyOf",
           params: {},
           message: "must match a schema in anyOf",
         };
         if (vErrors === null) {
-          vErrors = [err23];
+          vErrors = [err24];
         } else {
-          vErrors.push(err23);
+          vErrors.push(err24);
         }
         errors++;
       } else {
@@ -7970,13 +7959,180 @@ function validate112(
         }
       }
     }
-    if (data.video !== undefined) {
-      let data6 = data.video;
-      const _errs25 = errors;
-      let valid4 = false;
+    if (data.bitRate !== undefined) {
+      let data6 = data.bitRate;
       const _errs26 = errors;
+      let valid4 = false;
+      const _errs27 = errors;
+      if (!(
+        typeof data6 == "number" &&
+        !(data6 % 1) &&
+        !isNaN(data6) &&
+        isFinite(data6)
+      )) {
+        const err25 = {
+          instancePath: instancePath + "/bitRate",
+          schemaPath: "#/properties/bitRate/anyOf/0/type",
+          keyword: "type",
+          params: { type: "integer" },
+          message: "must be integer",
+        };
+        if (vErrors === null) {
+          vErrors = [err25];
+        } else {
+          vErrors.push(err25);
+        }
+        errors++;
+      }
+      if (typeof data6 == "number" && isFinite(data6)) {
+        if (data6 > 9007199254740991 || isNaN(data6)) {
+          const err26 = {
+            instancePath: instancePath + "/bitRate",
+            schemaPath: "#/properties/bitRate/anyOf/0/maximum",
+            keyword: "maximum",
+            params: { comparison: "<=", limit: 9007199254740991 },
+            message: "must be <= 9007199254740991",
+          };
+          if (vErrors === null) {
+            vErrors = [err26];
+          } else {
+            vErrors.push(err26);
+          }
+          errors++;
+        }
+        if (data6 < 0 || isNaN(data6)) {
+          const err27 = {
+            instancePath: instancePath + "/bitRate",
+            schemaPath: "#/properties/bitRate/anyOf/0/minimum",
+            keyword: "minimum",
+            params: { comparison: ">=", limit: 0 },
+            message: "must be >= 0",
+          };
+          if (vErrors === null) {
+            vErrors = [err27];
+          } else {
+            vErrors.push(err27);
+          }
+          errors++;
+        }
+      }
+      var _valid3 = _errs27 === errors;
+      valid4 = valid4 || _valid3;
+      const _errs29 = errors;
+      if (data6 !== null) {
+        const err28 = {
+          instancePath: instancePath + "/bitRate",
+          schemaPath: "#/properties/bitRate/anyOf/1/type",
+          keyword: "type",
+          params: { type: "null" },
+          message: "must be null",
+        };
+        if (vErrors === null) {
+          vErrors = [err28];
+        } else {
+          vErrors.push(err28);
+        }
+        errors++;
+      }
+      var _valid3 = _errs29 === errors;
+      valid4 = valid4 || _valid3;
+      if (!valid4) {
+        const err29 = {
+          instancePath: instancePath + "/bitRate",
+          schemaPath: "#/properties/bitRate/anyOf",
+          keyword: "anyOf",
+          params: {},
+          message: "must match a schema in anyOf",
+        };
+        if (vErrors === null) {
+          vErrors = [err29];
+        } else {
+          vErrors.push(err29);
+        }
+        errors++;
+      } else {
+        errors = _errs26;
+        if (vErrors !== null) {
+          if (_errs26) {
+            vErrors.length = _errs26;
+          } else {
+            vErrors = null;
+          }
+        }
+      }
+    }
+    if (data.audio !== undefined) {
+      let data7 = data.audio;
+      const _errs32 = errors;
+      let valid5 = false;
+      const _errs33 = errors;
       if (
-        !validate117(data6, {
+        !validate115(data7, {
+          instancePath: instancePath + "/audio",
+          parentData: data,
+          parentDataProperty: "audio",
+          rootData,
+          dynamicAnchors,
+        })
+      ) {
+        vErrors =
+          vErrors === null
+            ? validate115.errors
+            : vErrors.concat(validate115.errors);
+        errors = vErrors.length;
+      }
+      var _valid4 = _errs33 === errors;
+      valid5 = valid5 || _valid4;
+      const _errs34 = errors;
+      if (data7 !== null) {
+        const err30 = {
+          instancePath: instancePath + "/audio",
+          schemaPath: "#/properties/audio/anyOf/1/type",
+          keyword: "type",
+          params: { type: "null" },
+          message: "must be null",
+        };
+        if (vErrors === null) {
+          vErrors = [err30];
+        } else {
+          vErrors.push(err30);
+        }
+        errors++;
+      }
+      var _valid4 = _errs34 === errors;
+      valid5 = valid5 || _valid4;
+      if (!valid5) {
+        const err31 = {
+          instancePath: instancePath + "/audio",
+          schemaPath: "#/properties/audio/anyOf",
+          keyword: "anyOf",
+          params: {},
+          message: "must match a schema in anyOf",
+        };
+        if (vErrors === null) {
+          vErrors = [err31];
+        } else {
+          vErrors.push(err31);
+        }
+        errors++;
+      } else {
+        errors = _errs32;
+        if (vErrors !== null) {
+          if (_errs32) {
+            vErrors.length = _errs32;
+          } else {
+            vErrors = null;
+          }
+        }
+      }
+    }
+    if (data.video !== undefined) {
+      let data8 = data.video;
+      const _errs37 = errors;
+      let valid6 = false;
+      const _errs38 = errors;
+      if (
+        !validate117(data8, {
           instancePath: instancePath + "/video",
           parentData: data,
           parentDataProperty: "video",
@@ -7990,11 +8146,11 @@ function validate112(
             : vErrors.concat(validate117.errors);
         errors = vErrors.length;
       }
-      var _valid3 = _errs26 === errors;
-      valid4 = valid4 || _valid3;
-      const _errs27 = errors;
-      if (data6 !== null) {
-        const err24 = {
+      var _valid5 = _errs38 === errors;
+      valid6 = valid6 || _valid5;
+      const _errs39 = errors;
+      if (data8 !== null) {
+        const err32 = {
           instancePath: instancePath + "/video",
           schemaPath: "#/properties/video/anyOf/1/type",
           keyword: "type",
@@ -8002,16 +8158,16 @@ function validate112(
           message: "must be null",
         };
         if (vErrors === null) {
-          vErrors = [err24];
+          vErrors = [err32];
         } else {
-          vErrors.push(err24);
+          vErrors.push(err32);
         }
         errors++;
       }
-      var _valid3 = _errs27 === errors;
-      valid4 = valid4 || _valid3;
-      if (!valid4) {
-        const err25 = {
+      var _valid5 = _errs39 === errors;
+      valid6 = valid6 || _valid5;
+      if (!valid6) {
+        const err33 = {
           instancePath: instancePath + "/video",
           schemaPath: "#/properties/video/anyOf",
           keyword: "anyOf",
@@ -8019,16 +8175,16 @@ function validate112(
           message: "must match a schema in anyOf",
         };
         if (vErrors === null) {
-          vErrors = [err25];
+          vErrors = [err33];
         } else {
-          vErrors.push(err25);
+          vErrors.push(err33);
         }
         errors++;
       } else {
-        errors = _errs25;
+        errors = _errs37;
         if (vErrors !== null) {
-          if (_errs25) {
-            vErrors.length = _errs25;
+          if (_errs37) {
+            vErrors.length = _errs37;
           } else {
             vErrors = null;
           }
@@ -8036,7 +8192,7 @@ function validate112(
       }
     }
   } else {
-    const err26 = {
+    const err34 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -8044,9 +8200,9 @@ function validate112(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err26];
+      vErrors = [err34];
     } else {
-      vErrors.push(err26);
+      vErrors.push(err34);
     }
     errors++;
   }
@@ -10049,6 +10205,12 @@ const schema64 = {
     mediaPath: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
     language: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
     options: { additionalProperties: true, type: "object" },
+    audioTrack: {
+      default: 0,
+      maximum: 9007199254740991,
+      minimum: 0,
+      type: "integer",
+    },
   },
   required: ["kind", "adapterId", "modelId", "projectId", "runId"],
   title: "TranscriptionJobPayload",
@@ -10399,8 +10561,63 @@ function validate142(
         errors++;
       }
     }
+    if (data.audioTrack !== undefined) {
+      let data8 = data.audioTrack;
+      if (!(
+        typeof data8 == "number" &&
+        !(data8 % 1) &&
+        !isNaN(data8) &&
+        isFinite(data8)
+      )) {
+        const err18 = {
+          instancePath: instancePath + "/audioTrack",
+          schemaPath: "#/properties/audioTrack/type",
+          keyword: "type",
+          params: { type: "integer" },
+          message: "must be integer",
+        };
+        if (vErrors === null) {
+          vErrors = [err18];
+        } else {
+          vErrors.push(err18);
+        }
+        errors++;
+      }
+      if (typeof data8 == "number" && isFinite(data8)) {
+        if (data8 > 9007199254740991 || isNaN(data8)) {
+          const err19 = {
+            instancePath: instancePath + "/audioTrack",
+            schemaPath: "#/properties/audioTrack/maximum",
+            keyword: "maximum",
+            params: { comparison: "<=", limit: 9007199254740991 },
+            message: "must be <= 9007199254740991",
+          };
+          if (vErrors === null) {
+            vErrors = [err19];
+          } else {
+            vErrors.push(err19);
+          }
+          errors++;
+        }
+        if (data8 < 0 || isNaN(data8)) {
+          const err20 = {
+            instancePath: instancePath + "/audioTrack",
+            schemaPath: "#/properties/audioTrack/minimum",
+            keyword: "minimum",
+            params: { comparison: ">=", limit: 0 },
+            message: "must be >= 0",
+          };
+          if (vErrors === null) {
+            vErrors = [err20];
+          } else {
+            vErrors.push(err20);
+          }
+          errors++;
+        }
+      }
+    }
   } else {
-    const err18 = {
+    const err21 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -10408,9 +10625,9 @@ function validate142(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err18];
+      vErrors = [err21];
     } else {
-      vErrors.push(err18);
+      vErrors.push(err21);
     }
     errors++;
   }
@@ -10427,6 +10644,7 @@ validate142.evaluated = {
     mediaPath: true,
     language: true,
     options: true,
+    audioTrack: true,
   },
   dynamicProps: false,
   dynamicItems: false,
@@ -10440,6 +10658,12 @@ const schema65 = {
     sourceMediaType: {
       anyOf: [{ type: "string" }, { type: "null" }],
       default: null,
+    },
+    audioTrack: {
+      default: 0,
+      maximum: 9007199254740991,
+      minimum: 0,
+      type: "integer",
     },
   },
   required: ["kind", "projectId", "sourceStorageKey", "sourceFilename"],
@@ -10675,8 +10899,63 @@ function validate144(
         }
       }
     }
+    if (data.audioTrack !== undefined) {
+      let data5 = data.audioTrack;
+      if (!(
+        typeof data5 == "number" &&
+        !(data5 % 1) &&
+        !isNaN(data5) &&
+        isFinite(data5)
+      )) {
+        const err12 = {
+          instancePath: instancePath + "/audioTrack",
+          schemaPath: "#/properties/audioTrack/type",
+          keyword: "type",
+          params: { type: "integer" },
+          message: "must be integer",
+        };
+        if (vErrors === null) {
+          vErrors = [err12];
+        } else {
+          vErrors.push(err12);
+        }
+        errors++;
+      }
+      if (typeof data5 == "number" && isFinite(data5)) {
+        if (data5 > 9007199254740991 || isNaN(data5)) {
+          const err13 = {
+            instancePath: instancePath + "/audioTrack",
+            schemaPath: "#/properties/audioTrack/maximum",
+            keyword: "maximum",
+            params: { comparison: "<=", limit: 9007199254740991 },
+            message: "must be <= 9007199254740991",
+          };
+          if (vErrors === null) {
+            vErrors = [err13];
+          } else {
+            vErrors.push(err13);
+          }
+          errors++;
+        }
+        if (data5 < 0 || isNaN(data5)) {
+          const err14 = {
+            instancePath: instancePath + "/audioTrack",
+            schemaPath: "#/properties/audioTrack/minimum",
+            keyword: "minimum",
+            params: { comparison: ">=", limit: 0 },
+            message: "must be >= 0",
+          };
+          if (vErrors === null) {
+            vErrors = [err14];
+          } else {
+            vErrors.push(err14);
+          }
+          errors++;
+        }
+      }
+    }
   } else {
-    const err12 = {
+    const err15 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -10684,9 +10963,9 @@ function validate144(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err12];
+      vErrors = [err15];
     } else {
-      vErrors.push(err12);
+      vErrors.push(err15);
     }
     errors++;
   }
@@ -10700,6 +10979,7 @@ validate144.evaluated = {
     sourceStorageKey: true,
     sourceFilename: true,
     sourceMediaType: true,
+    audioTrack: true,
   },
   dynamicProps: false,
   dynamicItems: false,
@@ -10990,6 +11270,7 @@ function validate141(
     props0.mediaPath = true;
     props0.language = true;
     props0.options = true;
+    props0.audioTrack = true;
   }
   const _errs2 = errors;
   if (
@@ -11017,6 +11298,7 @@ function validate141(
       props0.sourceStorageKey = true;
       props0.sourceFilename = true;
       props0.sourceMediaType = true;
+      props0.audioTrack = true;
     }
   }
   const _errs3 = errors;

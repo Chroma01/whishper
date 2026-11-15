@@ -21,6 +21,7 @@ ACCESS = RemoteModelAccess(
     model="whisper-1",
 )
 SECOND_US = 1_000_000
+AUDIO = {"index": 0, "codec_type": "audio", "codec_name": "aac"}
 
 
 def transcript(**fields: Any) -> VerboseTranscript:
@@ -113,7 +114,7 @@ async def test_transcribes_every_part_and_reports_the_provider(
     media.write_bytes(b"media")
 
     async def probe(source: Path) -> dict[str, Any]:
-        return {"format": {"duration": "700.0"}, "streams": []}
+        return {"format": {"duration": "700.0"}, "streams": [AUDIO, {**AUDIO, "index": 1}]}
 
     async def prepare(
         source: Path,
@@ -121,7 +122,10 @@ async def test_transcribes_every_part_and_reports_the_provider(
         start_us: int,
         work_directory: Path,
         report: ProgressReporter,
+        *,
+        audio_track: int,
     ) -> list[AudioChunk]:
+        tracks.append(audio_track)
         parts = []
         for index, (start, end) in enumerate([(0, 600), (600, 700)]):
             path = work_directory / f"part-{index}.mp3"
@@ -139,6 +143,7 @@ async def test_transcribes_every_part_and_reports_the_provider(
     )
     progress: list[tuple[float, str]] = []
     sent: list[httpx.Request] = []
+    tracks: list[int] = []
 
     async def report(fraction: float, message: str) -> None:
         progress.append((fraction, message))
@@ -155,6 +160,7 @@ async def test_transcribes_every_part_and_reports_the_provider(
             modelId="model-row",
             mediaPath=str(media),
             options={"maxLineLength": 42, "prompt": " Anysub "},
+            audioTrack=1,
         ),
         ACCESS,
         report,
@@ -171,6 +177,7 @@ async def test_transcribes_every_part_and_reports_the_provider(
     assert artifact.metadata["provider"] == "OpenAI"
     assert artifact.metadata["model"] == "whisper-1"
     assert artifact.metadata["parts"] == 2
+    assert tracks == [1]
     assert len(sent) == 2
     assert all(b'name="prompt"\r\n\r\nAnysub\r\n' in request.content for request in sent)
     assert progress[-1][1] == "Building subtitle cues"
@@ -251,7 +258,7 @@ async def test_a_rejected_key_fails_the_job_for_good_with_its_message(
     media.write_bytes(b"media")
 
     async def probe(source: Path) -> dict[str, Any]:
-        return {"format": {"duration": "1300.0"}, "streams": []}
+        return {"format": {"duration": "1300.0"}, "streams": [AUDIO]}
 
     async def prepare(
         source: Path,
@@ -259,6 +266,8 @@ async def test_a_rejected_key_fails_the_job_for_good_with_its_message(
         start_us: int,
         work_directory: Path,
         report: ProgressReporter,
+        *,
+        audio_track: int,
     ) -> list[AudioChunk]:
         parts = []
         for index in range(3):
@@ -285,6 +294,35 @@ async def test_a_rejected_key_fails_the_job_for_good_with_its_message(
             transport=httpx.MockTransport(
                 lambda request: httpx.Response(401, json={"error": {"message": "bad key"}})
             ),
+        )
+
+    assert raised.value.retryable is False
+
+
+async def test_a_missing_audio_track_fails_before_any_upload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    media = tmp_path / "media.mkv"
+    media.write_bytes(b"media")
+
+    async def probe(source: Path) -> dict[str, Any]:
+        return {"format": {"duration": "10.0"}, "streams": [AUDIO]}
+
+    monkeypatch.setattr(remote_transcribe, "probe_source", probe)
+
+    with pytest.raises(AdapterExecutionError, match="no audio track 2") as raised:
+        await transcribe_remotely(
+            TranscriptionRequest(
+                jobId="job",
+                projectId="project",
+                runId="run",
+                modelId="model-row",
+                mediaPath=str(media),
+                audioTrack=1,
+            ),
+            ACCESS,
+            _ignore_progress,
+            runtime=AdapterRuntimeSettings(data_root=tmp_path),
         )
 
     assert raised.value.retryable is False

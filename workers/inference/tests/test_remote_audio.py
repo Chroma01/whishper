@@ -1,6 +1,11 @@
 from itertools import pairwise
+from pathlib import Path
 
-from anysub_worker.remote.audio import parse_silences, plan_cuts
+import pytest
+
+from anysub_worker.media.process import MediaToolResult
+from anysub_worker.remote import audio
+from anysub_worker.remote.audio import CHUNK_US, parse_silences, plan_cuts
 
 MINUTE_US = 60_000_000
 
@@ -51,3 +56,32 @@ def test_silences_count_from_the_start_of_the_file() -> None:
     log = "lavfi.silence_start=11.4\nlavfi.silence_end=12.4\n"
 
     assert parse_silences(log, start_us=1_400_000) == [(10_000_000, 11_000_000)]
+
+
+async def test_every_ffmpeg_step_reads_the_chosen_audio_track(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    maps: list[list[str]] = []
+
+    async def recording(
+        arguments: list[str], _timeout: float, **_kwargs: object
+    ) -> MediaToolResult:
+        maps.append([arguments[i + 1] for i, value in enumerate(arguments) if value == "-map"])
+        return MediaToolResult(stdout=b"", stderr="")
+
+    async def ignore_progress(fraction: float, message: str) -> None:
+        return None
+
+    monkeypatch.setattr(audio, "run_media_tool", recording)
+
+    chunks = await audio.prepare_audio_chunks(
+        tmp_path / "source.mkv",
+        CHUNK_US + 1_000_000,
+        0,
+        tmp_path,
+        ignore_progress,
+        audio_track=1,
+    )
+
+    assert len(chunks) == 2
+    assert maps == [["0:a:1"]] * 3

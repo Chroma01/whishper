@@ -9,7 +9,10 @@ import {
   type StoredJobError,
 } from "#lib/server/db/schema.ts";
 import { withTransaction } from "#lib/server/db/transaction.ts";
-import { holdsActiveLease } from "#lib/server/jobs/predicates.ts";
+import {
+  holdsActiveLease,
+  isUnreadMedia,
+} from "#lib/server/jobs/predicates.ts";
 import { RELEASED_LEASE } from "#lib/server/jobs/release.ts";
 import { cleanupStagedMediaAttempt } from "#lib/server/media/artifact-staging.ts";
 import { REMOTE_ADAPTER_ID } from "#lib/shared/transcription-models.ts";
@@ -153,7 +156,7 @@ function syncJobSubject(tx: Executor, job: JobSubject): void {
   if (job.payload.kind === "media_prepare") {
     tx.update(projects)
       .set({ mediaPreparationStatus: job.state })
-      .where(eq(projects.id, job.payload.projectId))
+      .where(and(eq(projects.id, job.payload.projectId), isUnreadMedia))
       .run();
   }
 }

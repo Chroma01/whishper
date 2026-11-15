@@ -1,23 +1,27 @@
-import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { db } from "#lib/server/db/index.ts";
-import { mediaDerivatives } from "#lib/server/db/schema.ts";
+import { jobs, mediaDerivatives } from "#lib/server/db/schema.ts";
 import {
   seedMember,
   seedProject,
   type SeededProject,
 } from "#lib/server/db/testing/fixtures.ts";
-import { deleteDerivativeForUser } from "#lib/server/media/derivatives.ts";
+import { removeAudioTrackCopyForUser } from "#lib/server/media/derivatives.ts";
 
-function seedThumbnail(project: SeededProject): void {
+function seedDerivative(
+  project: SeededProject,
+  kind: "waveform" | "proxy" | "thumbnail",
+  audioTrack: number,
+): void {
   db.insert(mediaDerivatives)
     .values({
       projectId: project.projectId,
-      kind: "thumbnail",
-      storageKey: `projects/${project.projectId}/thumbnails/poster.jpg`,
-      sourceStorageKey: `projects/${project.projectId}/original.mp4`,
-      mediaType: "image/jpeg",
+      kind,
+      audioTrack,
+      storageKey: `projects/${project.projectId}/${kind}/${audioTrack}`,
+      sourceStorageKey: `projects/${project.projectId}/original.mkv`,
+      mediaType: "application/octet-stream",
       sizeBytes: 1_024,
       schemaVersion: "1",
       generatorVersion: "1",
@@ -25,35 +29,84 @@ function seedThumbnail(project: SeededProject): void {
     .run();
 }
 
-function hasThumbnail(projectId: string): boolean {
-  return (
-    db
-      .select({ id: mediaDerivatives.id })
-      .from(mediaDerivatives)
-      .where(eq(mediaDerivatives.projectId, projectId))
-      .get() !== undefined
-  );
+function remaining(): { kind: string; audioTrack: number }[] {
+  return db
+    .select({
+      kind: mediaDerivatives.kind,
+      audioTrack: mediaDerivatives.audioTrack,
+    })
+    .from(mediaDerivatives)
+    .all();
 }
 
-describe("deleteDerivativeForUser", () => {
+function seedTwoTracks(): SeededProject {
+  const project = seedProject();
+  seedDerivative(project, "thumbnail", 0);
+  seedDerivative(project, "waveform", 0);
+  seedDerivative(project, "waveform", 1);
+  seedDerivative(project, "proxy", 1);
+  return project;
+}
+
+describe("removeAudioTrackCopyForUser", () => {
   it("refuses a plain member who did not create the project", async () => {
-    const project = seedProject();
-    seedThumbnail(project);
+    const project = seedTwoTracks();
     const member = seedMember(project.workspaceId, "member");
 
     await expect(
-      deleteDerivativeForUser(project.projectId, "thumbnail", member),
+      removeAudioTrackCopyForUser(project.projectId, 1, member),
     ).resolves.toBe(false);
-    expect(hasThumbnail(project.projectId)).toBe(true);
+    expect(remaining()).toHaveLength(4);
   });
 
-  it("deletes the derivative for a user who manages the project", async () => {
-    const project = seedProject();
-    seedThumbnail(project);
+  it("removes one track's waveform and preview and keeps the rest", async () => {
+    const project = seedTwoTracks();
 
     await expect(
-      deleteDerivativeForUser(project.projectId, "thumbnail", project.userId),
+      removeAudioTrackCopyForUser(project.projectId, 1, project.userId),
     ).resolves.toBe(true);
-    expect(hasThumbnail(project.projectId)).toBe(false);
+    expect(remaining()).toEqual([
+      { kind: "thumbnail", audioTrack: 0 },
+      { kind: "waveform", audioTrack: 0 },
+    ]);
+  });
+
+  it("stops the track's preparation so it does not come back", async () => {
+    const project = seedTwoTracks();
+    const queue = (audioTrack: number) =>
+      db
+        .insert(jobs)
+        .values({
+          workspaceId: project.workspaceId,
+          projectId: project.projectId,
+          kind: "media_prepare",
+          payload: {
+            kind: "media_prepare",
+            projectId: project.projectId,
+            sourceStorageKey: "original.mkv",
+            sourceFilename: "original.mkv",
+            audioTrack,
+          },
+        })
+        .run();
+    queue(0);
+    queue(1);
+
+    await removeAudioTrackCopyForUser(project.projectId, 1, project.userId);
+
+    expect(
+      db
+        .select({ state: jobs.state, payload: jobs.payload })
+        .from(jobs)
+        .all()
+        .map(({ state, payload }) => [
+          (payload as { audioTrack?: number }).audioTrack,
+          state,
+        ])
+        .sort(),
+    ).toEqual([
+      [0, "queued"],
+      [1, "cancelled"],
+    ]);
   });
 });

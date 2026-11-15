@@ -3,14 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..models import FrameRateMode, MediaProbeArtifact, MediaProbeStream
+from .tracks import audio_stream
 
 
 def apply_preview_policy(
-    probe: MediaProbeArtifact, source_filename: str, frame_rate_mode: FrameRateMode
+    probe: MediaProbeArtifact,
+    source_filename: str,
+    frame_rate_mode: FrameRateMode,
+    audio_track: int,
 ) -> MediaProbeArtifact:
     extension = Path(source_filename).suffix.lower()
     video = primary_video(probe)
-    audio = primary_audio(probe)
+    audio = audio_stream(probe, audio_track)
     reasons: list[str] = []
 
     if video is not None:
@@ -44,6 +48,9 @@ def apply_preview_policy(
         reasons.append("unreliable_seeking")
     if video is not None and frame_rate_mode == "variable":
         reasons.append("variable_frame_rate")
+    # A browser plays a file's first audio track and cannot switch to another.
+    if audio_track > 0:
+        reasons.append("audio_track")
 
     return probe.model_copy(
         update={
@@ -66,7 +73,3 @@ def primary_video(probe: MediaProbeArtifact) -> MediaProbeStream | None:
         ),
         None,
     )
-
-
-def primary_audio(probe: MediaProbeArtifact) -> MediaProbeStream | None:
-    return next((stream for stream in probe.streams if stream.type == "audio"), None)

@@ -12,7 +12,6 @@ import {
 } from "#lib/server/db/schema.ts";
 import { seedProject, seedTrack } from "#lib/server/db/testing/fixtures.ts";
 import {
-  TrackLockedByTranscription,
   TrackValidationError,
   updateTrackForUser,
 } from "#lib/server/subtitles/track-editor.ts";
@@ -212,7 +211,7 @@ describe("updateTrackForUser", () => {
     function startRun(
       projectId: string,
       userId: string,
-      status: "queued" | "running" | "completed",
+      status: "queued" | "running",
     ) {
       db.insert(transcriptionRuns)
         .values({
@@ -244,40 +243,23 @@ describe("updateTrackForUser", () => {
     }
 
     it.each(["queued", "running"] as const)(
-      "refuses the save and writes nothing while the run is %s",
+      "saves the existing transcript while the new run is %s",
       (status) => {
         const seeded = seedTrackWithCue();
         startRun(seeded.projectId, seeded.userId, status);
 
-        expect(() =>
-          updateTrackForUser(
-            seeded.projectId,
-            seeded.trackId,
-            seeded.userId,
-            edit(seeded.cueId),
-          ),
-        ).toThrow(TrackLockedByTranscription);
+        const revision = updateTrackForUser(
+          seeded.projectId,
+          seeded.trackId,
+          seeded.userId,
+          edit(seeded.cueId),
+        );
+
+        expect(revision).toBe(1);
         expect(storedState(seeded.trackId)).toEqual([
-          { text: "Before", revision: 0 },
+          { text: "After", revision: 1 },
         ]);
       },
     );
-
-    it("saves again once the run has finished", () => {
-      const seeded = seedTrackWithCue();
-      startRun(seeded.projectId, seeded.userId, "completed");
-
-      const revision = updateTrackForUser(
-        seeded.projectId,
-        seeded.trackId,
-        seeded.userId,
-        edit(seeded.cueId),
-      );
-
-      expect(revision).toBe(1);
-      expect(storedState(seeded.trackId)).toEqual([
-        { text: "After", revision: 1 },
-      ]);
-    });
   });
 });

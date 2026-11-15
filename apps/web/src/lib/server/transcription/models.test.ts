@@ -38,7 +38,7 @@ function worker(
   models: AdapterModel[],
 ): WorkerManifest {
   return {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: "worker",
     name: "worker",
     version: "1.0.0",
@@ -50,7 +50,7 @@ function worker(
     },
     adapters: [
       {
-        protocolVersion: "1.0",
+        protocolVersion: "1.1",
         id: "whisperx",
         displayName: "WhisperX",
         version: "1",

@@ -140,8 +140,12 @@ async function checkThemeMenuKeyboard(context, theme) {
     const menu = page.getByRole("menu", { name: "Theme" });
 
     await openMenuWithKeyboard(page, trigger);
+    if ((await focusedText(page)) !== "System") {
+      throw new Error("opening did not focus the chosen theme");
+    }
+    await page.keyboard.press("Home");
     if ((await focusedText(page)) !== "Light") {
-      throw new Error("opening did not focus the first item");
+      throw new Error("Home did not move focus to the first item");
     }
     await page.keyboard.press("ArrowDown");
     if ((await focusedText(page)) !== "Dark") {
@@ -153,7 +157,7 @@ async function checkThemeMenuKeyboard(context, theme) {
       throw new Error("Escape did not return focus to the trigger");
     }
 
-    await chooseTheme(page, trigger, "ArrowDown");
+    await chooseTheme(page, trigger, "ArrowUp");
     if ((await appliedTheme(page)) !== "dark") {
       throw new Error("choosing Dark did not apply the dark theme");
     }

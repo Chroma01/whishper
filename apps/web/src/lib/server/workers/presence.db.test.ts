@@ -13,7 +13,7 @@ import {
 
 function manifest(): WorkerManifest {
   return {
-    protocolVersion: "1.0",
+    protocolVersion: "1.1",
     workerId: randomUUID(),
     name: "presence-test",
     version: "1.0.0",

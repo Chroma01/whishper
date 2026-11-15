@@ -188,6 +188,7 @@ function projectSummary(
         typeof preparation?.error?.message === "string"
           ? preparation.error.message
           : null,
+      audioTracks: project.audioTracks,
     },
     latestTranscription: latestTranscription(executor, projectId),
   };

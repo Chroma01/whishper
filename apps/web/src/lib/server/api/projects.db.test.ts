@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const dataRoot = vi.hoisted(() => ({ path: "" }));
@@ -71,6 +72,31 @@ describe("API projects", () => {
     expect(ownPage.projects[0]?.name).toBe("Mine");
     expect(nextPage.projects[0]?.id).toBe(own.projectId);
     expect(nextPage.nextCursor).toBeNull();
+  });
+
+  it("list the file's audio tracks", () => {
+    const project = seedProject();
+    db.update(projects)
+      .set({
+        mediaProbe: {
+          streams: [
+            { index: 0, type: "video", codec: "h264" },
+            { index: 1, type: "audio", codec: "aac", language: "jpn" },
+            { index: 2, type: "audio", codec: "ac3", title: "Commentary" },
+          ],
+        },
+      })
+      .where(eq(projects.id, project.projectId))
+      .run();
+
+    expect(
+      projectForApi(project.userId, project.projectId).media,
+    ).toMatchObject({
+      audioTracks: [
+        { index: 0, codec: "aac", language: "ja", title: null },
+        { index: 1, codec: "ac3", language: null, title: "Commentary" },
+      ],
+    });
   });
 
   it("hide projects outside the user's workspaces", () => {

@@ -68,7 +68,7 @@ describe("parseProtocolMessage", () => {
     expect(result.ok).toBe(false);
     expect(!result.ok && result.errors).toEqual(
       expect.arrayContaining([
-        "/protocolVersion must be equal to constant: 1.0",
+        "/protocolVersion must be equal to constant: 1.1",
         "/adapters/0/id must NOT have fewer than 1 characters",
       ]),
     );

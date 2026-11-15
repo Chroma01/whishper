@@ -88,24 +88,27 @@ describe("isPreparationActive", () => {
 describe("isStudioActive", () => {
   it("detects a queued or running transcription run", () => {
     expect(
-      isStudioActive({ run: { status: "running" }, preparation: null }),
+      isStudioActive({ run: { status: "running" }, preparations: [] }),
     ).toBe(true);
     expect(
-      isStudioActive({ run: { status: "completed" }, preparation: null }),
+      isStudioActive({ run: { status: "completed" }, preparations: [] }),
     ).toBe(false);
   });
 
   it("detects a queued or leased preparation job", () => {
     expect(
-      isStudioActive({ run: null, preparation: { state: "leased" } }),
+      isStudioActive({
+        run: null,
+        preparations: [{ state: "completed" }, { state: "leased" }],
+      }),
     ).toBe(true);
     expect(
-      isStudioActive({ run: null, preparation: { state: "succeeded" } }),
+      isStudioActive({ run: null, preparations: [{ state: "succeeded" }] }),
     ).toBe(false);
   });
 
   it("is false with nothing in flight", () => {
-    expect(isStudioActive({ run: null, preparation: null })).toBe(false);
+    expect(isStudioActive({ run: null, preparations: [] })).toBe(false);
   });
 });
 

@@ -27,7 +27,6 @@
     durationUs: number;
     contentWidthPx: number;
     neighbourBounds: TimingBounds;
-    editable: boolean;
     cueKeysId: string;
     handleKeysId: string;
     onselect: (cueId: string) => void;
@@ -60,7 +59,6 @@
     durationUs,
     contentWidthPx,
     neighbourBounds,
-    editable,
     cueKeysId,
     handleKeysId,
     onselect,
@@ -125,11 +123,6 @@
 
   function beginDrag(event: PointerEvent, part: TimingPart): void {
     if (event.button !== 0) return;
-    if (!editable) {
-      event.stopPropagation();
-      onselect(cue.id);
-      return;
-    }
     if (durationUs <= 0 || !cueIsValid(cue, durationUs)) return;
     event.preventDefault();
     event.stopPropagation();
@@ -188,7 +181,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent, part: TimingPart): void {
-    const action = timelineKeyAction(event, part, editable, drag !== null);
+    const action = timelineKeyAction(event, part, drag !== null);
     switch (action.kind) {
       case "cancel_drag":
         cancelDrag(event);
@@ -196,9 +189,6 @@
       case "nudge":
         claim(event);
         nudge(action.edge, action.deltaUs);
-        return;
-      case "block":
-        claim(event);
         return;
       case "focus_handle":
         claim(event);
@@ -254,7 +244,7 @@
       highlighted
         ? "border-accent bg-accent/30 ring-1 ring-accent/30"
         : "border-accent/80 bg-accent/15 hover:bg-accent/25",
-      editable ? (drag ? "cursor-grabbing" : "cursor-grab") : "cursor-pointer",
+      drag ? "cursor-grabbing" : "cursor-grab",
     ]}
     type="button"
     tabindex={tabStop ? 0 : -1}
@@ -278,24 +268,22 @@
       )}</span
     >
   </button>
-  {#if editable}
-    <button
-      bind:this={startHandle}
-      class={[HANDLE_CLASSES, handleGripClasses, "left-0 after:left-0.5"]}
-      type="button"
-      tabindex="-1"
-      aria-label={`Adjust start of ${label} ${number}, currently ${formatEditorTime(timing.start_us)}`}
-      aria-describedby={handleKeysId}
-      {...interactions("start")}
-    ></button>
-    <button
-      bind:this={endHandle}
-      class={[HANDLE_CLASSES, handleGripClasses, "right-0 after:right-0.5"]}
-      type="button"
-      tabindex="-1"
-      aria-label={`Adjust end of ${label} ${number}, currently ${formatEditorTime(timing.end_us)}`}
-      aria-describedby={handleKeysId}
-      {...interactions("end")}
-    ></button>
-  {/if}
+  <button
+    bind:this={startHandle}
+    class={[HANDLE_CLASSES, handleGripClasses, "left-0 after:left-0.5"]}
+    type="button"
+    tabindex="-1"
+    aria-label={`Adjust start of ${label} ${number}, currently ${formatEditorTime(timing.start_us)}`}
+    aria-describedby={handleKeysId}
+    {...interactions("start")}
+  ></button>
+  <button
+    bind:this={endHandle}
+    class={[HANDLE_CLASSES, handleGripClasses, "right-0 after:right-0.5"]}
+    type="button"
+    tabindex="-1"
+    aria-label={`Adjust end of ${label} ${number}, currently ${formatEditorTime(timing.end_us)}`}
+    aria-describedby={handleKeysId}
+    {...interactions("end")}
+  ></button>
 </div>

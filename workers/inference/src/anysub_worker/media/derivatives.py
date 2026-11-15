@@ -15,6 +15,7 @@ from ..timing import MICROSECONDS_PER_SECOND
 from .errors import MediaPreparationError, MediaToolTimeoutError
 from .playback import primary_video
 from .process import run_media_tool, scaled_timeout_seconds
+from .tracks import audio_stream, audio_track_map
 
 THUMBNAIL_MAX_WIDTH = 640
 # A tenth of the way in skips most intros and fades to black.
@@ -95,12 +96,12 @@ async def generate_thumbnail(
 
 
 async def generate_proxy(
-    source_path: Path, output_directory: Path, probe: MediaProbeArtifact
+    source_path: Path, output_directory: Path, probe: MediaProbeArtifact, audio_track: int
 ) -> PreparedDerivative:
     video = primary_video(probe)
     if video is None:
         path = output_directory / "preview.mp3"
-        arguments = ["-map", "0:a:0", "-c:a", "libmp3lame", "-q:a", "3", str(path)]
+        arguments = [*audio_track_map(audio_track), "-c:a", "libmp3lame", "-q:a", "3", str(path)]
         media_type = "audio/mpeg"
         metadata: dict[str, Any] = {"audioCodec": "mp3"}
     else:
@@ -108,11 +109,11 @@ async def generate_proxy(
         if video.video is None:
             raise MediaPreparationError("The source video metadata is incomplete.")
         frame_rate = _proxy_frame_rate(video.video)
+        audio_map = audio_track_map(audio_track) if audio_stream(probe, audio_track) else ()
         arguments = [
             "-map",
             "0:V:0",
-            "-map",
-            "0:a:0?",
+            *audio_map,
             "-vf",
             (
                 f"fps={frame_rate.numerator}/{frame_rate.denominator},"

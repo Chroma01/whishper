@@ -1,41 +1,95 @@
 <script lang="ts">
   import Icon from "#lib/components/Icon.svelte";
   import type { CueEditor } from "#lib/editor/editor.svelte.ts";
+  import {
+    audioTrackName,
+    transcriptAudioTrack,
+  } from "#lib/shared/audio-tracks.ts";
   import { pluralize } from "#lib/shared/format.ts";
+  import { languageName } from "#lib/shared/languages.ts";
   import { isRunActive } from "#lib/shared/project-status.ts";
-  import { isEditingLocked } from "./project-view";
+  import type { SubtitleTrackSummary } from "#lib/shared/subtitles.ts";
   import CueList from "./CueList.svelte";
   import EditorToolbar from "./EditorToolbar.svelte";
   import JournalNotice from "./JournalNotice.svelte";
   import ProcessingStatus from "./ProcessingStatus.svelte";
   import TranscribePanel, { processingNote } from "./TranscribePanel.svelte";
+  import TranscriptNotices from "./TranscriptNotices.svelte";
+  import TranscriptSwitcher from "./TranscriptSwitcher.svelte";
   import type { StudioData } from "#lib/shared/studio-data.ts";
 
   type Props = {
     editor: CueEditor;
     track: StudioData["track"];
+    tracks: StudioData["tracks"];
+    readyTrack: SubtitleTrackSummary | null;
     run: StudioData["run"];
-    preparation: StudioData["preparation"];
+    preparations: StudioData["preparations"];
     mediaPreparationStatus: StudioData["project"]["mediaPreparationStatus"];
     hasSourceMedia: boolean;
     mediaDurationUs: number | null;
     transcriptionModels: StudioData["transcriptionModels"];
     detectedHardware: StudioData["detectedHardware"];
     transcriptionDefaults: StudioData["transcriptionDefaults"];
+    audioTracks: StudioData["project"]["audioTracks"];
+    // The track a new transcript starts on: the one playing.
+    audioTrack: number;
+    oncreate: (() => void) | null;
+    canDelete: boolean;
+    onopentrack: (trackId: string) => void;
+    ondismissready: () => void;
   };
 
   let {
     editor,
     track,
+    tracks,
+    readyTrack,
     run,
-    preparation,
+    preparations,
     mediaPreparationStatus,
     hasSourceMedia,
     mediaDurationUs,
     transcriptionModels,
     detectedHardware,
     transcriptionDefaults,
+    audioTracks,
+    audioTrack,
+    oncreate,
+    canDelete,
+    onopentrack,
+    ondismissready,
   }: Props = $props();
+
+  // Named only when the file has a choice. Older transcripts do not record it.
+  const sourceTrack = $derived.by(() => {
+    const index = track && transcriptAudioTrack(track.metadata);
+    if (audioTracks.length < 2 || index === null) return null;
+    return audioTracks.find((candidate) => candidate.index === index) ?? null;
+  });
+  // The language is known up front only when it was chosen.
+  const runLabel = $derived(
+    run?.language
+      ? `New ${languageName(run.language)} transcript`
+      : "New transcript",
+  );
+  const pending = $derived(
+    run && isRunActive(run)
+      ? {
+          label: runLabel,
+          status: [
+            audioTracks.length > 1 ? `Track ${run.audioTrack + 1}` : null,
+            run.progressMessage ?? "Waiting for a worker",
+            run.progress === null ? null : `${Math.round(run.progress * 100)}%`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        }
+      : null,
+  );
+  const firstPreparation = $derived(
+    mediaPreparationStatus === "completed" ? null : (preparations[0] ?? null),
+  );
 </script>
 
 <section
@@ -45,29 +99,46 @@
   <header
     class="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border px-4"
   >
-    <h2 class="truncate text-sm font-semibold text-text">
-      {track?.name ?? "Transcript"}
-    </h2>
     {#if track}
-      <span class="shrink-0 text-xs text-text-muted">
-        {track.language.toUpperCase()} · {pluralize(editor.cues.length, "cue")}
+      <!-- The switcher holds a dialog, which a heading cannot contain. -->
+      <h2 class="sr-only">Transcript</h2>
+      <div class="flex min-w-0">
+        <TranscriptSwitcher
+          {tracks}
+          openTrackId={track.id}
+          showAudioTrack={audioTracks.length > 1}
+          {pending}
+          {oncreate}
+          {canDelete}
+          onopen={onopentrack}
+        />
+      </div>
+    {:else}
+      <h2 class="text-sm font-semibold text-text">Transcript</h2>
+    {/if}
+    {#if track}
+      <span
+        class="shrink-0 text-xs text-text-muted"
+        title={sourceTrack ? audioTrackName(sourceTrack) : undefined}
+      >
+        {#if sourceTrack}Track {sourceTrack.index + 1} ·{/if}
+        {pluralize(editor.cues.length, "cue")}
       </span>
     {/if}
   </header>
+  <!-- Announces the transcript a switch opened. -->
+  <p class="sr-only" role="status">
+    {track ? `${languageName(track.language)} transcript` : ""}
+  </p>
 
   <JournalNotice autosave={editor.autosave} />
-  <ProcessingStatus {run} {preparation} {mediaPreparationStatus} />
-  <!-- Always mounted, so screen readers announce the lock when it starts. -->
-  <div role="status" class="shrink-0">
-    {#if isEditingLocked(track, run)}
-      <p
-        class="border-b border-border bg-accent-soft px-4 py-2 text-sm text-text"
-      >
-        A new transcription is running. Editing resumes when it finishes or you
-        cancel it.
-      </p>
-    {/if}
-  </div>
+  <ProcessingStatus
+    {run}
+    {runLabel}
+    preparation={firstPreparation}
+    {mediaPreparationStatus}
+  />
+  <TranscriptNotices {readyTrack} onopenready={onopentrack} {ondismissready} />
 
   {#if track}
     <EditorToolbar {editor} />
@@ -80,6 +151,8 @@
       hardware={detectedHardware}
       defaults={transcriptionDefaults}
       {mediaDurationUs}
+      {audioTracks}
+      {audioTrack}
     >
       {#snippet intro()}
         {@render status()}
@@ -101,7 +174,7 @@
         <Icon name="subtitles" size={16} />
       </span>
       {#if isRunActive(run)}
-        Preparing the first track
+        Making the first transcript
       {:else if hasSourceMedia}
         Ready to transcribe
       {:else}
@@ -110,8 +183,7 @@
     </h3>
     {#if isRunActive(run)}
       <p class="text-sm text-text-muted">
-        The worker will place normalized subtitle cues here when processing
-        finishes.
+        Its subtitles appear here when it finishes.
       </p>
     {:else if hasSourceMedia}
       <p class="text-xs text-text-muted">

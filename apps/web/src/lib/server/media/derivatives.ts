@@ -1,11 +1,14 @@
 import { unlink } from "node:fs/promises";
 
 import type { MediaDerivativeKind } from "@anysub/contracts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import { db } from "#lib/server/db/index.ts";
-import { mediaDerivatives } from "#lib/server/db/schema.ts";
+import { db, type Executor } from "#lib/server/db/index.ts";
+import { jobs, mediaDerivatives } from "#lib/server/db/schema.ts";
 import { withTransaction } from "#lib/server/db/transaction.ts";
+import { cancelActiveJobs } from "#lib/server/jobs/release.ts";
+import { cleanupStagedMediaArtifacts } from "#lib/server/media/artifact-staging.ts";
+import { activePreparation } from "#lib/server/media/preparation.ts";
 import { manageableProjectForUser } from "#lib/server/projects/access.ts";
 import { resolveDataPath } from "#lib/server/storage/paths.ts";
 import { GIB, MAX_UPLOAD_LIMIT_GIB } from "#lib/shared/instance-settings.ts";
@@ -36,6 +39,41 @@ export const DERIVATIVE_FORMATS: Record<MediaDerivativeKind, DerivativeFormat> =
     },
   };
 
+// The thumbnail comes from the picture alone, so it is stored as track 0.
+export const AUDIO_DERIVATIVE_KINDS: MediaDerivativeKind[] = [
+  "waveform",
+  "proxy",
+];
+
+export function derivativeAudioTrack(
+  kind: MediaDerivativeKind,
+  audioTrack: number,
+): number {
+  return AUDIO_DERIVATIVE_KINDS.includes(kind) ? audioTrack : 0;
+}
+
+// Every file with audio gets a waveform, so it marks a prepared track.
+export function hasAudioTrackCopy(
+  executor: Executor,
+  projectId: string,
+  audioTrack: number,
+): boolean {
+  return (
+    executor
+      .select({ id: mediaDerivatives.id })
+      .from(mediaDerivatives)
+      .where(
+        and(
+          eq(mediaDerivatives.projectId, projectId),
+          eq(mediaDerivatives.kind, "waveform"),
+          eq(mediaDerivatives.audioTrack, audioTrack),
+          eq(mediaDerivatives.status, "ready"),
+        ),
+      )
+      .get() !== undefined
+  );
+}
+
 export function isMediaDerivativeKind(
   value: string,
 ): value is MediaDerivativeKind {
@@ -64,6 +102,7 @@ export function derivativeMediaType(
 export function readyDerivativeFile(
   projectId: string,
   kind: MediaDerivativeKind,
+  audioTrack: number,
 ): { storageKey: string; mediaType: string } | null {
   const derivative = db
     .select({
@@ -75,6 +114,7 @@ export function readyDerivativeFile(
       and(
         eq(mediaDerivatives.projectId, projectId),
         eq(mediaDerivatives.kind, kind),
+        eq(mediaDerivatives.audioTrack, derivativeAudioTrack(kind, audioTrack)),
         eq(mediaDerivatives.status, "ready"),
       ),
     )
@@ -82,26 +122,38 @@ export function readyDerivativeFile(
   return derivative ?? null;
 }
 
-export async function deleteDerivativeForUser(
+// Removes a track's waveform and preview, and stops a preparation that would
+// bring them back. The track can be prepared again.
+export async function removeAudioTrackCopyForUser(
   projectId: string,
-  kind: MediaDerivativeKind,
+  audioTrack: number,
   userId: string,
 ): Promise<boolean> {
-  const storageKey = withTransaction((tx) => {
+  const removed = withTransaction((tx) => {
     if (!manageableProjectForUser(tx, projectId, userId)) return null;
-    const derivative = tx
+    const preparation = activePreparation(tx, projectId, audioTrack);
+    if (preparation) cancelActiveJobs(tx, eq(jobs.id, preparation.id));
+    const storageKeys = tx
       .delete(mediaDerivatives)
       .where(
         and(
           eq(mediaDerivatives.projectId, projectId),
-          eq(mediaDerivatives.kind, kind),
+          inArray(mediaDerivatives.kind, AUDIO_DERIVATIVE_KINDS),
+          eq(mediaDerivatives.audioTrack, audioTrack),
         ),
       )
       .returning({ storageKey: mediaDerivatives.storageKey })
-      .get();
-    return derivative?.storageKey ?? null;
+      .all()
+      .map(({ storageKey }) => storageKey);
+    return { storageKeys, cancelledJob: preparation?.id ?? null };
   });
-  if (!storageKey) return false;
-  await unlink(resolveDataPath(storageKey)).catch(() => undefined);
-  return true;
+  if (!removed) return false;
+  const { storageKeys, cancelledJob } = removed;
+  await Promise.all([
+    ...storageKeys.map((storageKey) =>
+      unlink(resolveDataPath(storageKey)).catch(() => undefined),
+    ),
+    cancelledJob ? cleanupStagedMediaArtifacts(cancelledJob) : null,
+  ]);
+  return storageKeys.length > 0 || cancelledJob !== null;
 }

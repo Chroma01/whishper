@@ -5,15 +5,22 @@
     isPreparationActive,
     isRunActive,
   } from "#lib/shared/project-status.ts";
-  import type { StudioData } from "#lib/shared/studio-data.ts";
+  import type {
+    StudioData,
+    StudioPreparation,
+  } from "#lib/shared/studio-data.ts";
 
   type Props = {
     run: StudioData["run"];
-    preparation: StudioData["preparation"];
+    // Names the transcript the run is making.
+    runLabel: string;
+    // The preparation that first reads the file. Later ones belong to an
+    // audio track and show in the player.
+    preparation: StudioPreparation | null;
     mediaPreparationStatus: StudioData["project"]["mediaPreparationStatus"];
   };
 
-  let { run, preparation, mediaPreparationStatus }: Props = $props();
+  let { run, runLabel, preparation, mediaPreparationStatus }: Props = $props();
 </script>
 
 {#snippet activeJob(
@@ -66,7 +73,7 @@
 
 {#if run && isRunActive(run)}
   {@render activeJob(
-    "Transcription",
+    runLabel,
     run.progressMessage ?? "Waiting for a compatible worker",
     run.progress,
     "?/cancelTranscription",

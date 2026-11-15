@@ -96,9 +96,11 @@ export function isPreparationActive(
 
 export function isStudioActive(studio: {
   run: { status: string } | null;
-  preparation: { state: string } | null;
+  preparations: readonly { state: string }[];
 }): boolean {
-  return isRunActive(studio.run) || isPreparationActive(studio.preparation);
+  return (
+    isRunActive(studio.run) || studio.preparations.some(isPreparationActive)
+  );
 }
 
 export function displayState(project: ProjectStatusFields): DisplayState {

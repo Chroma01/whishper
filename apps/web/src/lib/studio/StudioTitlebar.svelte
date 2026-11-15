@@ -36,46 +36,39 @@
 </script>
 
 <script lang="ts">
-  import type { MediaDerivativeKind } from "@anysub/contracts";
   import Icon from "#lib/components/Icon.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import IconButton from "#lib/components/ui/IconButton.svelte";
   import Menu from "#lib/components/ui/Menu.svelte";
   import MenuItem from "#lib/components/ui/MenuItem.svelte";
   import { buttonClasses } from "#lib/components/ui/variants.ts";
-  import { confirmSubmit } from "#lib/browser/confirm-submit.ts";
   import { formatBytes } from "#lib/shared/format.ts";
+  import { languageName } from "#lib/shared/languages.ts";
   import { trackExportUrl } from "#lib/shared/routes.ts";
   import type { StudioData } from "#lib/shared/studio-data.ts";
 
   type Props = {
     project: StudioData["project"];
     track: StudioData["track"];
-    derivativeKinds: MediaDerivativeKind[];
     autosave: Autosave;
-    canRetranscribe: boolean;
-    onretranscribe: () => void;
+    canCreateTranscript: boolean;
+    oncreatetranscript: () => void;
     onopenshortcuts: () => void;
+    onopenmedia: () => void;
   };
 
   let {
     project,
     track,
-    derivativeKinds,
     autosave,
-    canRetranscribe,
-    onretranscribe,
+    canCreateTranscript,
+    oncreatetranscript,
     onopenshortcuts,
+    onopenmedia,
   }: Props = $props();
 
-  const id = $props.id();
-  const formIds = {
-    deleteTranscript: `${id}-delete-transcript`,
-    prepareMedia: `${id}-prepare-media`,
-    deleteProject: `${id}-delete-project`,
-    deleteDerivative: (kind: MediaDerivativeKind) =>
-      `${id}-delete-derivative-${kind}`,
-  };
+  let deleteProjectOpen = $state(false);
 
   const mediaDetails = $derived(
     [
@@ -109,9 +102,14 @@
       <h1 class="truncate text-sm font-semibold text-text" title={project.name}>
         {project.name}
       </h1>
-      <p class="truncate text-xs text-text-muted max-sm:hidden">
+      <button
+        type="button"
+        class="block max-w-full truncate rounded-xs text-left text-xs text-text-muted hover:text-text hover:underline focus-visible:outline-2 focus-visible:outline-focus max-sm:hidden"
+        title="Media details"
+        onclick={onopenmedia}
+      >
         {mediaDetails}
-      </p>
+      </button>
     </div>
   </div>
 
@@ -136,10 +134,10 @@
   </div>
 
   <div class="flex items-center justify-end gap-1">
-    {#if canRetranscribe}
-      <Button size="sm" class="max-sm:px-2" onclick={onretranscribe}>
-        <Icon name="refresh" size={16} />
-        <span class="max-sm:sr-only">Re-transcribe</span>
+    {#if canCreateTranscript}
+      <Button size="sm" class="max-sm:px-2" onclick={oncreatetranscript}>
+        <Icon name="plus" size={16} />
+        <span class="max-sm:sr-only">New transcript</span>
       </Button>
     {/if}
     {#if track}
@@ -155,6 +153,9 @@
             <span class="max-sm:hidden">Export</span>
           </button>
         {/snippet}
+        <p class="px-2.5 pt-1 pb-1.5 text-xs text-text-muted">
+          The {languageName(track.language)} transcript as
+        </p>
         {#each EXPORTS as { format, name, description } (format)}
           <MenuItem
             href={trackExportUrl(project.id, track.id, format)}
@@ -173,75 +174,27 @@
       icon="keyboard"
       onclick={onopenshortcuts}
     />
-    {#if project.canManage}
-      <Menu label="Project actions" align="end">
-        {#snippet trigger(args)}
-          <IconButton label="Project actions" icon="more" {...args} />
-        {/snippet}
-        <MenuItem form={formIds.prepareMedia}>
-          {project.mediaPreparationStatus === "completed"
-            ? "Regenerate media derivatives"
-            : "Prepare media"}
-        </MenuItem>
+    <Menu label="Project actions" align="end">
+      {#snippet trigger(args)}
+        <IconButton label="Project actions" icon="more" {...args} />
+      {/snippet}
+      <MenuItem onselect={onopenmedia}>Media details…</MenuItem>
+      {#if project.canManage}
         <div role="separator" class="-mx-1 my-1 border-t border-border"></div>
-        {#each derivativeKinds as kind (kind)}
-          <MenuItem form={formIds.deleteDerivative(kind)} tone="danger">
-            Delete {kind} derivative
-          </MenuItem>
-        {/each}
-        {#if track}
-          <MenuItem form={formIds.deleteTranscript} tone="danger">
-            Delete transcript
-          </MenuItem>
-        {/if}
-        <MenuItem form={formIds.deleteProject} tone="danger">
-          Delete project
+        <MenuItem tone="danger" onselect={() => (deleteProjectOpen = true)}>
+          Delete project…
         </MenuItem>
-      </Menu>
-    {/if}
+      {/if}
+    </Menu>
   </div>
 </header>
 
 {#if project.canManage}
-  <form
-    id={formIds.prepareMedia}
-    method="POST"
-    action="?/prepareMedia"
-    hidden
-  ></form>
-  {#each derivativeKinds as kind (kind)}
-    <form
-      id={formIds.deleteDerivative(kind)}
-      method="POST"
-      action="?/deleteDerivative"
-      onsubmit={confirmSubmit(
-        `Delete the ${kind} derivative? The source media will remain.`,
-      )}
-      hidden
-    >
-      <input type="hidden" name="kind" value={kind} />
-    </form>
-  {/each}
-  {#if track}
-    <form
-      id={formIds.deleteTranscript}
-      method="POST"
-      action="?/deleteTranscript"
-      onsubmit={confirmSubmit(
-        "Delete this transcript, its cues, and processing record? The source media will remain.",
-      )}
-      hidden
-    >
-      <input type="hidden" name="trackId" value={track.id} />
-    </form>
-  {/if}
-  <form
-    id={formIds.deleteProject}
-    method="POST"
+  <ConfirmDialog
+    bind:open={deleteProjectOpen}
+    title="Delete {project.name}?"
+    message="The project, its media and every transcript are deleted. This cannot be undone."
+    confirmLabel="Delete project"
     action="?/deleteProject"
-    onsubmit={confirmSubmit(
-      "Delete this project, its source media, and every transcript? This cannot be undone.",
-    )}
-    hidden
-  ></form>
+  />
 {/if}

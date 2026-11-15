@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { db } from "#lib/server/db/index.ts";
-import { mediaUploads } from "#lib/server/db/schema.ts";
+import { jobs, mediaUploads } from "#lib/server/db/schema.ts";
 import { seedProject } from "#lib/server/db/testing/fixtures.ts";
 import {
   latestMediaPreparation,
+  latestMediaPreparations,
   latestRun,
   readyDerivatives,
   studioProject,
@@ -52,7 +53,40 @@ describe("studio queries", () => {
     expect(readyDerivatives(db, project.projectId)).toEqual([]);
     expect(studioStatus(db, project.projectId)).toEqual({
       run: null,
-      preparation: null,
+      preparations: [],
     });
+  });
+
+  it("keeps the newest preparation of each audio track", async () => {
+    const project = await seedProject({ mediaOriginalKey: "media/film.mkv" });
+    const prepare = (audioTrack: number | null, state: "failed" | "queued") =>
+      db
+        .insert(jobs)
+        .values({
+          workspaceId: project.workspaceId,
+          projectId: project.projectId,
+          kind: "media_prepare",
+          state,
+          payload: {
+            kind: "media_prepare",
+            projectId: project.projectId,
+            sourceStorageKey: "media/film.mkv",
+            sourceFilename: "film.mkv",
+            ...(audioTrack === null ? {} : { audioTrack }),
+          },
+        })
+        .run();
+    prepare(null, "failed");
+    prepare(1, "failed");
+    prepare(1, "queued");
+
+    expect(
+      latestMediaPreparations(db, project.projectId).map(
+        ({ audioTrack, state }) => ({ audioTrack, state }),
+      ),
+    ).toEqual([
+      { audioTrack: 1, state: "queued" },
+      { audioTrack: 0, state: "failed" },
+    ]);
   });
 });

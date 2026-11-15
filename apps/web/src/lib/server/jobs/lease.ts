@@ -25,6 +25,7 @@ import { generateLeaseToken, hashToken } from "#lib/server/jobs/lease-token.ts";
 import {
   holdsActiveLease,
   isMediaPrepareJob,
+  isUnreadMedia,
   isModelCacheJobOf,
   payloadField,
 } from "#lib/server/jobs/predicates.ts";
@@ -135,7 +136,7 @@ export async function leaseJob(
     } else if (job.payload.kind === "media_prepare") {
       tx.update(projects)
         .set({ mediaPreparationStatus: "running" })
-        .where(eq(projects.id, job.payload.projectId))
+        .where(and(eq(projects.id, job.payload.projectId), isUnreadMedia))
         .run();
     }
 

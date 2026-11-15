@@ -13,9 +13,10 @@ from ..models import (
 from .derivatives import PreparedDerivative, generate_proxy, generate_thumbnail
 from .errors import MediaPreparationError
 from .frame_rate import detect_frame_rate_mode
-from .playback import apply_preview_policy, primary_audio, primary_video
+from .playback import apply_preview_policy, primary_video
 from .probe import normalize_probe, probe_source
 from .process import ffmpeg_version
+from .tracks import audio_stream
 from .waveform import generate_waveform
 
 
@@ -39,13 +40,17 @@ async def prepare_media(
     source_filename: str,
     output_directory: Path,
     report_progress: ProgressReporter,
+    *,
+    audio_track: int,
 ) -> PreparedMedia:
     output_directory.mkdir(parents=True, exist_ok=True)
     await report_progress(0.0, "Probing media")
     probe = normalize_probe(await probe_source(source_path))
 
     video = primary_video(probe)
-    audio = primary_audio(probe)
+    audio = audio_stream(probe, audio_track)
+    if audio is None and audio_track > 0:
+        raise MediaPreparationError(f"The source has no audio track {audio_track + 1}.")
     if video is None and audio is None:
         raise MediaPreparationError("The source does not contain usable audio or video.")
 
@@ -54,13 +59,13 @@ async def prepare_media(
         await report_progress(0.15, "Inspecting frame cadence")
         frame_rate_mode = await detect_frame_rate_mode(source_path, video, probe.duration_us)
 
-    probe = apply_preview_policy(probe, source_filename, frame_rate_mode)
+    probe = apply_preview_policy(probe, source_filename, frame_rate_mode, audio_track)
     derivatives: list[PreparedDerivative] = []
 
     if audio is not None:
         await report_progress(0.3, "Building waveform")
         derivatives.append(
-            await generate_waveform(source_path, output_directory, probe.duration_us)
+            await generate_waveform(source_path, output_directory, probe.duration_us, audio_track)
         )
 
     if video is not None:
@@ -71,7 +76,7 @@ async def prepare_media(
 
     if probe.proxy_recommended:
         await report_progress(0.7, "Building browser preview")
-        derivatives.append(await generate_proxy(source_path, output_directory, probe))
+        derivatives.append(await generate_proxy(source_path, output_directory, probe, audio_track))
 
     await report_progress(1.0, "Preparing derivatives for upload")
     return PreparedMedia(

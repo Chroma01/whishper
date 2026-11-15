@@ -18,14 +18,13 @@
   };
   const OPTIONS = [DETECT_AUTOMATICALLY, ...LANGUAGES];
 
+  // Without a binding, the value starts at `initial` once: a later change to
+  // the default must not discard a choice.
   let {
     initial = DETECT_LANGUAGE,
     label = "Spoken language",
-  }: { initial?: string; label?: string } = $props();
-
-  // Seeded once: later changes to the default must not discard a choice.
-  // svelte-ignore state_referenced_locally
-  let value = $state(initial);
+    value = $bindable(initial),
+  }: { initial?: string; label?: string; value?: string } = $props();
 
   function matchesSearchedLanguage(language: Language, query: string): boolean {
     return (

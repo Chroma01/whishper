@@ -204,7 +204,7 @@ describe("completeJob", () => {
 describe("leaseJob reclaim", () => {
   function idleWorker(): WorkerManifest {
     return {
-      protocolVersion: "1.0",
+      protocolVersion: "1.1",
       workerId: randomUUID(),
       name: "reclaimer",
       version: "1.0.0",
@@ -302,7 +302,7 @@ describe("failJob", () => {
         name: "worker",
         version: "1.0.0",
         architecture: "x86_64",
-        protocolVersion: "1.0",
+        protocolVersion: "1.1",
         manifest: {} as never,
       })
       .run();
@@ -351,7 +351,7 @@ describe("remote transcriptions", () => {
     const old = connectWorker(remoteWorker(false));
     const capable = connectWorker(remoteWorker(true));
     const { modelId } = seedRemoteModel();
-    enqueueRemote(modelId);
+    await enqueueRemote(modelId);
 
     await expect(leaseJob(old)).resolves.toBeNull();
     const lease = await leaseJob(capable);
@@ -367,7 +367,7 @@ describe("remote transcriptions", () => {
   it("fail when the model was removed before a worker took the job", async () => {
     const capable = connectWorker(remoteWorker(true));
     const { modelId } = seedRemoteModel();
-    enqueueRemote(modelId);
+    await enqueueRemote(modelId);
     removeProviderModel(modelId);
 
     await expect(leaseJob(capable)).resolves.toBeNull();
@@ -381,7 +381,7 @@ describe("remote transcriptions", () => {
   it("name the transcript after the provider and price its length", async () => {
     const capable = connectWorker(remoteWorker(true));
     const { modelId } = seedRemoteModel(6_000);
-    enqueueRemote(modelId);
+    await enqueueRemote(modelId);
     const lease = await leaseJob(capable);
     if (!lease) throw new Error("Expected a lease");
     const completion: TranscriptionJobCompletion = {
@@ -415,7 +415,7 @@ describe("remote transcriptions", () => {
   it("do not blame memory when a remote worker vanishes", async () => {
     const capable = connectWorker(remoteWorker(true));
     const { modelId } = seedRemoteModel();
-    enqueueRemote(modelId);
+    await enqueueRemote(modelId);
     const lease = await leaseJob(capable);
     if (!lease) throw new Error("Expected a lease");
     db.update(jobs)

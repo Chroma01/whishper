@@ -1,10 +1,7 @@
 import { requireUserOrLogin } from "#lib/server/auth/session.ts";
 import { db } from "#lib/server/db/index.ts";
 import { runFormAction } from "#lib/server/http/actions.ts";
-import {
-  deleteDerivativeForUser,
-  isMediaDerivativeKind,
-} from "#lib/server/media/derivatives.ts";
+import { removeAudioTrackCopyForUser } from "#lib/server/media/derivatives.ts";
 import {
   cancelMediaPreparationForUser,
   requestMediaPreparationForUser,
@@ -12,14 +9,17 @@ import {
 import { projectForUser } from "#lib/server/projects/access.ts";
 import { deleteProjectForUser } from "#lib/server/projects/delete.ts";
 import {
-  latestMediaPreparation,
+  latestMediaPreparations,
   latestRun,
   readyDerivatives,
   studioProject,
 } from "#lib/server/projects/studio.ts";
 import { readTranscriptionDefaults } from "#lib/server/settings/instance.ts";
 import { listTrackCues } from "#lib/server/subtitles/cues.ts";
-import { latestTrackForProject } from "#lib/server/subtitles/tracks.ts";
+import {
+  listProjectTracks,
+  trackForProject,
+} from "#lib/server/subtitles/tracks.ts";
 import { deleteTranscriptForUser } from "#lib/server/subtitles/transcripts.ts";
 import { cancelTranscriptionForUser } from "#lib/server/transcription/cancel.ts";
 import {
@@ -34,7 +34,7 @@ import { activeWorkerManifests } from "#lib/server/workers/presence.ts";
 import { projectDerivativeUrl, projectPageUrl } from "#lib/shared/routes.ts";
 import type { StudioData } from "#lib/shared/studio-data.ts";
 import { isUuid } from "#lib/shared/uuid.ts";
-import { error, fail, redirect } from "@sveltejs/kit";
+import { error, fail, redirect, type ActionFailure } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({
@@ -46,10 +46,21 @@ export const load: PageServerLoad = async ({
   const project = access && studioProject(db, access.id);
   if (!access || !project) error(404, "Project not found");
 
+  // The address names the open transcript, so a reload, a link or a form
+  // action keeps it, and a new one finishing elsewhere does not replace it.
+  const tracks = listProjectTracks(db, project.id);
+  const newest = tracks.at(-1);
+  if (!params.trackId && newest) {
+    redirect(303, projectPageUrl(project.id, newest.id));
+  }
+  const track = params.trackId
+    ? trackForProject(db, project.id, params.trackId)
+    : null;
+  if (params.trackId && !track) redirect(303, projectPageUrl(project.id));
+
   const run = latestRun(db, project.id);
-  const preparation = latestMediaPreparation(db, project.id);
+  const preparations = latestMediaPreparations(db, project.id);
   const derivatives = readyDerivatives(db, project.id);
-  const track = latestTrackForProject(db, project.id);
   const workerManifests = activeWorkerManifests(db);
   const transcriptionDefaults = readTranscriptionDefaults(db);
   const cues = track ? listTrackCues(db, track.id) : [];
@@ -57,12 +68,17 @@ export const load: PageServerLoad = async ({
   return {
     project: { ...project, canManage: access.canManage },
     run,
-    preparation,
+    preparations,
     derivatives: derivatives.map((derivative) => ({
       ...derivative,
-      url: projectDerivativeUrl(project.id, derivative.kind),
+      url: projectDerivativeUrl(
+        project.id,
+        derivative.kind,
+        derivative.audioTrack,
+      ),
     })),
     track,
+    tracks,
     cues,
     transcriptionModels: transcriptionModelChoices(
       db,
@@ -79,12 +95,12 @@ export const actions: Actions = {
     const user = requireUserOrLogin(locals);
     const values = await request.formData();
     return runFormAction(async () => {
-      enqueueTranscription(
+      await enqueueTranscription(
         params.projectId,
         user.id,
         parseTranscriptionRequest(values),
       );
-      redirect(303, projectPageUrl(params.projectId));
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
     }, "The transcription could not be queued.");
   },
   cancelTranscription: async ({ locals, params }) => {
@@ -95,41 +111,53 @@ export const actions: Actions = {
           message: "The transcription is no longer active.",
         });
       }
-      redirect(303, projectPageUrl(params.projectId));
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
     }, "The transcription could not be cancelled.");
   },
-  prepareMedia: async ({ locals, params }) => {
+  prepareMedia: async ({ locals, params, request }) => {
     const user = requireUserOrLogin(locals);
+    const audioTrack = audioTrackField(await request.formData());
+    if (typeof audioTrack !== "number") return audioTrack;
     return runFormAction(async () => {
-      if (!requestMediaPreparationForUser(params.projectId, user.id)) {
-        return fail(404, { message: "Project media was not found." });
-      }
-      redirect(303, projectPageUrl(params.projectId));
+      requestMediaPreparationForUser(params.projectId, user.id, audioTrack);
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
     }, "Media preparation could not be queued.");
   },
-  cancelMedia: async ({ locals, params }) => {
+  cancelMedia: async ({ locals, params, request }) => {
     const user = requireUserOrLogin(locals);
+    const audioTrack = audioTrackField(await request.formData());
+    if (typeof audioTrack !== "number") return audioTrack;
     return runFormAction(async () => {
-      if (!(await cancelMediaPreparationForUser(params.projectId, user.id))) {
+      if (
+        !(await cancelMediaPreparationForUser(
+          params.projectId,
+          user.id,
+          audioTrack,
+        ))
+      ) {
         return fail(409, {
           message: "Media preparation is no longer active.",
         });
       }
-      redirect(303, projectPageUrl(params.projectId));
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
     }, "Media preparation could not be cancelled.");
   },
-  deleteDerivative: async ({ locals, params, request }) => {
+  removeAudioCopy: async ({ locals, params, request }) => {
     const user = requireUserOrLogin(locals);
-    const kind = String((await request.formData()).get("kind") ?? "");
-    if (!isMediaDerivativeKind(kind)) {
-      return fail(400, { message: "The derivative type is invalid." });
-    }
+    const audioTrack = audioTrackField(await request.formData());
+    if (typeof audioTrack !== "number") return audioTrack;
     return runFormAction(async () => {
-      if (!(await deleteDerivativeForUser(params.projectId, kind, user.id))) {
-        return fail(404, { message: "The derivative was not found." });
+      if (
+        !(await removeAudioTrackCopyForUser(
+          params.projectId,
+          audioTrack,
+          user.id,
+        ))
+      ) {
+        return fail(404, { message: "That track's audio was not prepared." });
       }
-      redirect(303, projectPageUrl(params.projectId));
-    }, "The derivative could not be deleted.");
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
+    }, "The track's audio could not be removed.");
   },
   deleteTranscript: async ({ locals, params, request }) => {
     const user = requireUserOrLogin(locals);
@@ -158,3 +186,13 @@ export const actions: Actions = {
     }, "The project could not be deleted.");
   },
 };
+
+// The first track when the form names none.
+function audioTrackField(
+  values: FormData,
+): number | ActionFailure<{ message: string }> {
+  const value = String(values.get("audioTrack") ?? "0");
+  return /^\d+$/.test(value)
+    ? Number(value)
+    : fail(400, { message: "Choose a valid audio track." });
+}

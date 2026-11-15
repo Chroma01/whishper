@@ -166,7 +166,7 @@ Retranscription creates a new run. It does not replace prior output.
 
 ### Track and cue
 
-A project can contain multiple subtitle tracks. Tracks come from transcription runs. Planned: tracks from imported subtitle files and translations, with each translated track recording its source lineage.
+A project can contain multiple subtitle tracks. Tracks come from transcription runs. The studio edits one track at a time and names it in the page address, so a reload or a form action keeps it. It plays the audio track the open transcript came from. Planned: tracks from imported subtitle files and translations, with each translated track recording its source lineage.
 
 Cues are the editing unit. Each cue has a stable identity, integer-microsecond timing, and text. Planned: a semantic type and optional speaker or style references. Stable IDs and revisioned commands leave room for simultaneous editing later.
 
@@ -216,7 +216,7 @@ V1 does not support permanently linked external media. That mode can follow if a
 
 FFprobe inspects every source. Anysub streams a browser-compatible, reliably seekable original when possible. It generates a constant-frame-rate preview proxy when codecs, container, frame behavior, or source size make direct playback unreliable.
 
-Users can inspect the recommendation and create, cancel, delete, or regenerate a proxy. Planned: administrators choose an automatic, ask-first, or disabled policy. Cue times remain relative to the original timeline.
+Each audio track that plays gets its own waveform and, when needed, its own proxy, because a browser plays only a file's first audio track. Users can see each track's preparation, cancel or rebuild it, and remove a track's waveform and proxy. Planned: administrators choose an automatic, ask-first, or disabled policy. Cue times remain relative to the original timeline.
 
 ## Ingest
 

@@ -416,6 +416,9 @@ export const mediaDerivatives = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
     kind: text("kind", { enum: ["waveform", "thumbnail", "proxy"] }).notNull(),
+    // The audio stream a waveform or preview plays, counted from 0 the way
+    // ffmpeg's "0:a:N" does. Always 0 for a thumbnail.
+    audioTrack: integer("audio_track").notNull().default(0),
     status: text("status", { enum: ["ready", "failed", "deleting"] })
       .notNull()
       .default("ready"),
@@ -430,9 +433,10 @@ export const mediaDerivatives = sqliteTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    unique("media_derivatives_project_kind_unique").on(
+    unique("media_derivatives_project_kind_track_unique").on(
       table.projectId,
       table.kind,
+      table.audioTrack,
     ),
     index("media_derivatives_project_created_idx").on(
       table.projectId,

@@ -9,7 +9,11 @@ import {
   transcriptionRuns,
   workspaces,
 } from "#lib/server/db/schema.ts";
-import { isMediaPrepareJob } from "#lib/server/jobs/predicates.ts";
+import {
+  isMediaPrepareJob,
+  preparationAudioTrack,
+} from "#lib/server/jobs/predicates.ts";
+import { audioTracksOf } from "#lib/shared/audio-tracks.ts";
 import type {
   StudioDerivative,
   StudioPreparation,
@@ -57,7 +61,11 @@ export function studioProject(
     .get();
   if (!row) return null;
   const { mediaOriginalKey, ...project } = row;
-  return { ...project, hasSourceMedia: Boolean(mediaOriginalKey) };
+  return {
+    ...project,
+    hasSourceMedia: Boolean(mediaOriginalKey),
+    audioTracks: audioTracksOf(project.mediaProbe),
+  };
 }
 
 export function latestRun(
@@ -80,6 +88,8 @@ export function latestRun(
   const job = latestRunJob(executor, run.id);
   return {
     ...run,
+    audioTrack: job?.audioTrack ?? 0,
+    language: job?.language ?? null,
     jobState: job?.jobState ?? null,
     progress: job?.progress ?? null,
     progressMessage: job?.progressMessage ?? null,
@@ -89,7 +99,12 @@ export function latestRun(
 
 export function latestRunJob(executor: Executor, runId: string) {
   return executor
-    .select({ jobState: jobs.state, ...JOB_PROGRESS })
+    .select({
+      jobState: jobs.state,
+      audioTrack: sql<number>`coalesce(${jobs.payload} ->> 'audioTrack', 0)`,
+      language: sql<string | null>`${jobs.payload} ->> 'language'`,
+      ...JOB_PROGRESS,
+    })
     .from(jobs)
     .where(eq(jobs.runId, runId))
     .orderBy(...NEWEST_FIRST)
@@ -97,18 +112,38 @@ export function latestRunJob(executor: Executor, runId: string) {
     .get();
 }
 
+function mediaPreparationJobs(executor: Executor, projectId: string) {
+  return executor
+    .select({
+      state: jobs.state,
+      audioTrack: preparationAudioTrack,
+      ...JOB_PROGRESS,
+    })
+    .from(jobs)
+    .where(and(eq(jobs.projectId, projectId), isMediaPrepareJob))
+    .orderBy(...NEWEST_FIRST);
+}
+
 export function latestMediaPreparation(
   executor: Executor,
   projectId: string,
 ): StudioPreparation | null {
-  const job = executor
-    .select({ state: jobs.state, ...JOB_PROGRESS })
-    .from(jobs)
-    .where(and(eq(jobs.projectId, projectId), isMediaPrepareJob))
-    .orderBy(...NEWEST_FIRST)
-    .limit(1)
-    .get();
-  return job ?? null;
+  return mediaPreparationJobs(executor, projectId).limit(1).get() ?? null;
+}
+
+// The newest preparation of each audio track, newest first.
+export function latestMediaPreparations(
+  executor: Executor,
+  projectId: string,
+): StudioPreparation[] {
+  const seen = new Set<number>();
+  return mediaPreparationJobs(executor, projectId)
+    .all()
+    .filter(({ audioTrack }) => {
+      if (seen.has(audioTrack)) return false;
+      seen.add(audioTrack);
+      return true;
+    });
 }
 
 export function studioStatus(
@@ -117,7 +152,7 @@ export function studioStatus(
 ): StudioStatus {
   return {
     run: latestRun(executor, projectId),
-    preparation: latestMediaPreparation(executor, projectId),
+    preparations: latestMediaPreparations(executor, projectId),
   };
 }
 
@@ -128,6 +163,7 @@ export function readyDerivatives(
   return executor
     .select({
       kind: mediaDerivatives.kind,
+      audioTrack: mediaDerivatives.audioTrack,
       mediaType: mediaDerivatives.mediaType,
       sizeBytes: mediaDerivatives.sizeBytes,
       metadata: mediaDerivatives.metadata,
@@ -139,6 +175,6 @@ export function readyDerivatives(
         eq(mediaDerivatives.status, "ready"),
       ),
     )
-    .orderBy(asc(mediaDerivatives.kind))
+    .orderBy(asc(mediaDerivatives.kind), asc(mediaDerivatives.audioTrack))
     .all();
 }

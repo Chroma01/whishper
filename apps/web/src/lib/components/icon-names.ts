@@ -53,4 +53,7 @@ export type IconName =
   | "film"
   | "clock"
   | "check-circle"
-  | "words";
+  | "words"
+  | "mute"
+  | "expand"
+  | "audio-lines";

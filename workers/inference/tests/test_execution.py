@@ -69,12 +69,17 @@ async def test_media_job_uploads_derivatives_before_completion(
         streams=(),
     )
 
+    audio_tracks: list[int] = []
+
     async def fake_prepare_media(
         source_path: Path,
         source_filename: str,
         output_directory: Path,
         report_progress: ProgressReporter,
+        *,
+        audio_track: int,
     ) -> PreparedMedia:
+        audio_tracks.append(audio_track)
         output_directory.mkdir()
         waveform = output_directory / "waveform.json"
         waveform.write_bytes(b"waveform")
@@ -92,8 +97,12 @@ async def test_media_job_uploads_derivatives_before_completion(
 
     monkeypatch.setattr(execution, "prepare_media", fake_prepare_media)
 
-    await execution.execute_job(recording_client, AdapterRegistry(()), media_lease)
+    lease = media_lease.model_copy(
+        update={"payload": media_lease.payload.model_copy(update={"audio_track": 1})}
+    )
+    await execution.execute_job(recording_client, AdapterRegistry(()), lease)
 
+    assert audio_tracks == [1]
     assert recording_client.downloads == 1
     assert recording_client.download_names == ["source.wav"]
     assert recording_client.uploads == [("waveform", b"waveform")]

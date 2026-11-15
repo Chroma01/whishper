@@ -3,6 +3,7 @@ import type { TranscriptionJobPayload } from "@anysub/contracts";
 import { jobs, transcriptionRuns } from "#lib/server/db/schema.ts";
 import { withTransaction } from "#lib/server/db/transaction.ts";
 import { badRequest, conflict, notFound } from "#lib/server/http/errors.ts";
+import { prepareTranscriptAudio } from "#lib/server/media/audio-track.ts";
 import { projectForUser } from "#lib/server/projects/access.ts";
 import { readInstanceSettings } from "#lib/server/settings/instance.ts";
 import { resolveDataPath } from "#lib/server/storage/paths.ts";
@@ -37,6 +38,8 @@ export type TranscriptionRequest = {
   adapterId: string;
   modelId: string;
   language: string | null;
+  // Null transcribes the first audio track.
+  audioTrack: number | null;
   options: TranscriptionOptions;
 };
 
@@ -50,6 +53,8 @@ export function parseTranscriptionRequest(
     String(values.get("maxLineLength") ?? DEFAULT_MAX_LINE_LENGTH).trim(),
   );
   const prompt = String(values.get("prompt") ?? "").trim();
+  const audioTrackValue = String(values.get("audioTrack") ?? "").trim();
+  const audioTrack = audioTrackValue ? Number(audioTrackValue) : null;
 
   if (!model) {
     throw badRequest("Choose an available transcription model.");
@@ -80,10 +85,17 @@ export function parseTranscriptionRequest(
       `The prompt can be at most ${MAX_PROMPT_LENGTH} characters.`,
     );
   }
+  if (
+    audioTrack !== null &&
+    (!Number.isInteger(audioTrack) || audioTrack < 0)
+  ) {
+    throw badRequest("Choose a valid audio track.");
+  }
 
   return {
     ...model,
     language: language === DETECT_LANGUAGE ? null : language,
+    audioTrack,
     options: {
       alignment: values.get("alignment") === "on",
       maxLineLength,
@@ -93,15 +105,16 @@ export function parseTranscriptionRequest(
   };
 }
 
-export function enqueueTranscription(
+export async function enqueueTranscription(
   projectId: string,
   userId: string,
   request: TranscriptionRequest,
-): string {
+): Promise<string> {
   return withTransaction((tx) => {
     const project = projectForUser(tx, projectId, userId);
     if (!project) throw notFound("Project not found.");
-    if (!project.mediaOriginalKey) {
+    const sourceStorageKey = project.mediaOriginalKey;
+    if (!sourceStorageKey) {
       throw conflict("The source upload is not complete yet.");
     }
 
@@ -131,6 +144,9 @@ export function enqueueTranscription(
         ? { ...request.options, precision }
         : request.options;
 
+    const audioTrack = request.audioTrack ?? 0;
+    prepareTranscriptAudio(tx, { ...project, sourceStorageKey }, audioTrack);
+
     const run = tx
       .insert(transcriptionRuns)
       .values({
@@ -148,9 +164,10 @@ export function enqueueTranscription(
       modelId: request.modelId,
       projectId: project.id,
       runId: run.id,
-      mediaPath: resolveDataPath(project.mediaOriginalKey),
+      mediaPath: resolveDataPath(sourceStorageKey),
       ...(request.language === null ? {} : { language: request.language }),
       options,
+      audioTrack,
     };
     tx.insert(jobs)
       .values({

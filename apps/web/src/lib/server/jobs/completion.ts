@@ -185,6 +185,7 @@ function storeTranscript(
         schemaVersion: artifact.schemaVersion,
         durationUs: artifact.durationUs,
         ...artifact.metadata,
+        audioTrack: payload.audioTrack ?? 0,
       },
     })
     .returning({ id: subtitleTracks.id })

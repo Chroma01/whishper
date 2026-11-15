@@ -1,33 +1,20 @@
-import { asc, count, eq } from "drizzle-orm";
-
 import type { ApiTrack, ApiTrackSummary } from "#lib/server/api/schemas.ts";
 import { db, type Executor } from "#lib/server/db/index.ts";
-import { cues, subtitleTracks } from "#lib/server/db/schema.ts";
 import { notFound } from "#lib/server/http/errors.ts";
 import { requireMemberProject } from "#lib/server/projects/access.ts";
 import { listTrackCues } from "#lib/server/subtitles/cues.ts";
+import { listProjectTracks } from "#lib/server/subtitles/tracks.ts";
 import { isRecord } from "#lib/shared/is-record.ts";
 
 export function trackSummaries(
   executor: Executor,
   projectId: string,
 ): ApiTrackSummary[] {
-  return executor
-    .select({
-      id: subtitleTracks.id,
-      name: subtitleTracks.name,
-      language: subtitleTracks.language,
-      cueCount: count(cues.id),
-      transcriptionId: subtitleTracks.sourceRunId,
-      createdAt: subtitleTracks.createdAt,
-    })
-    .from(subtitleTracks)
-    .leftJoin(cues, eq(cues.trackId, subtitleTracks.id))
-    .where(eq(subtitleTracks.projectId, projectId))
-    .groupBy(subtitleTracks.id)
-    .orderBy(asc(subtitleTracks.createdAt))
-    .all()
-    .map((track) => ({ ...track, createdAt: track.createdAt.toISOString() }));
+  return listProjectTracks(executor, projectId).map(({ runId, ...track }) => ({
+    ...track,
+    transcriptionId: runId,
+    createdAt: track.createdAt.toISOString(),
+  }));
 }
 
 export function tracksForUser(

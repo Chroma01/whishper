@@ -48,6 +48,8 @@ export class Transport {
   // Bumped on every deliberate jump of the playhead, as opposed to playback
   // progress, so views can reveal the new position.
   seekRevision = $state(0);
+  // Normal playback runs at this rate, and the shuttle multiplies it.
+  playbackSpeed = $state(1);
   readonly #selection: CueSelection;
   readonly #options: TransportOptions;
   #reverseShuttleTimer = $state<number>();
@@ -145,7 +147,15 @@ export class Transport {
     this.#clearReverseShuttleTimer();
     this.#shuttleDirection = 0;
     this.#shuttleRate = 1;
-    if (this.mediaElement) this.mediaElement.playbackRate = 1;
+    if (this.mediaElement) this.mediaElement.playbackRate = this.playbackSpeed;
+  }
+
+  setPlaybackSpeed(speed: number): void {
+    this.playbackSpeed = speed;
+    if (!this.mediaElement) return;
+    // A new source starts at the default rate.
+    this.mediaElement.defaultPlaybackRate = speed;
+    this.mediaElement.playbackRate = speed * this.#shuttleRate;
   }
 
   #pauseAndResetPlayback(): boolean {
@@ -237,7 +247,7 @@ export class Transport {
       this.#shuttleDirection === 1 ? nextShuttleRate(this.#shuttleRate) : 1;
     this.#shuttleDirection = 1;
     this.#clearReverseShuttleTimer();
-    this.mediaElement.playbackRate = this.#shuttleRate;
+    this.mediaElement.playbackRate = this.#shuttleRate * this.playbackSpeed;
     void this.mediaElement.play();
     return true;
   }

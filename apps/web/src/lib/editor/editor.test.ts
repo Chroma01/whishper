@@ -247,33 +247,3 @@ describe("CueEditor.undo", () => {
     expect(editor.selectedCueId).toBe("c");
   });
 });
-
-describe("CueEditor read-only", () => {
-  it("ignores every edit while read-only and accepts them again afterwards", () => {
-    let locked = false;
-    const editor = newEditor(() => locked);
-    editor.loadTrack(trackA, [cue("a", "server"), cue("b", "next")], 1);
-    editor.setText(0, "before the lock");
-    editor.insertAfterSelected();
-    const before = JSON.parse(JSON.stringify(editor.cues));
-    locked = true;
-
-    editor.setText(0, "typed while locked");
-    editor.setTime(0, "end_us", 500_000);
-    editor.splitSelected();
-    editor.mergeSelected();
-    editor.insertAfterSelected();
-    editor.nudgeSelected(100);
-    editor.retime({ id: "a", start_us: 0, end_us: 900_000 });
-    editor.deleteSelected();
-    editor.undo();
-
-    expect(editor.cues).toEqual(before);
-    expect(editor.canUndo).toBe(false);
-
-    locked = false;
-    expect(editor.canUndo).toBe(true);
-    editor.setText(0, "after the lock");
-    expect(editor.cues[0].text).toBe("after the lock");
-  });
-});

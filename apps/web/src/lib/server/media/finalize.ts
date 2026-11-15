@@ -7,7 +7,7 @@ import type {
   MediaPreparationJobCompletion,
   MediaPreparationJobPayload,
 } from "@anysub/contracts";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, notInArray, or } from "drizzle-orm";
 
 import type { Executor } from "#lib/server/db/index.ts";
 import { mediaDerivatives, projects } from "#lib/server/db/schema.ts";
@@ -15,6 +15,7 @@ import { unprocessable } from "#lib/server/http/errors.ts";
 import { stagedArtifactPath } from "#lib/server/media/artifact-staging.ts";
 import {
   DERIVATIVE_FORMATS,
+  derivativeAudioTrack,
   derivativeExtension,
 } from "#lib/server/media/derivatives.ts";
 import {
@@ -103,11 +104,20 @@ export function recordMediaFinalization(
       "Project source changed before media preparation completed.",
     );
   }
+  const audioTrack = payload.audioTrack ?? 0;
+  // A job replaces its own track's waveform and preview, and the thumbnail.
+  const replaced = and(
+    eq(mediaDerivatives.projectId, payload.projectId),
+    or(
+      eq(mediaDerivatives.audioTrack, audioTrack),
+      eq(mediaDerivatives.kind, "thumbnail"),
+    ),
+  );
 
   const previous = tx
     .select({ storageKey: mediaDerivatives.storageKey })
     .from(mediaDerivatives)
-    .where(eq(mediaDerivatives.projectId, payload.projectId))
+    .where(replaced)
     .all();
 
   const frameRate = primaryFrameRate(completion.probe);
@@ -118,8 +128,12 @@ export function recordMediaFinalization(
       mediaProbe: { ...completion.probe },
       mediaFrameRateNum: frameRate?.numerator ?? null,
       mediaFrameRateDen: frameRate?.denominator ?? null,
-      mediaSeekable: completion.probe.seekable,
-      mediaProxyRecommended: completion.probe.proxyRecommended,
+      // A browser plays the first track, so only its preparation tells
+      // whether the source plays as it is.
+      ...(audioTrack === 0 && {
+        mediaSeekable: completion.probe.seekable,
+        mediaProxyRecommended: completion.probe.proxyRecommended,
+      }),
     })
     .where(eq(projects.id, payload.projectId))
     .run();
@@ -127,7 +141,7 @@ export function recordMediaFinalization(
   tx.delete(mediaDerivatives)
     .where(
       and(
-        eq(mediaDerivatives.projectId, payload.projectId),
+        replaced,
         notInArray(
           mediaDerivatives.kind,
           plan.derivatives.map(({ artifact }) => artifact.kind),
@@ -152,9 +166,18 @@ export function recordMediaFinalization(
       updatedAt: now,
     };
     tx.insert(mediaDerivatives)
-      .values({ projectId: payload.projectId, kind: artifact.kind, ...row })
+      .values({
+        projectId: payload.projectId,
+        kind: artifact.kind,
+        audioTrack: derivativeAudioTrack(artifact.kind, audioTrack),
+        ...row,
+      })
       .onConflictDoUpdate({
-        target: [mediaDerivatives.projectId, mediaDerivatives.kind],
+        target: [
+          mediaDerivatives.projectId,
+          mediaDerivatives.kind,
+          mediaDerivatives.audioTrack,
+        ],
         set: row,
       })
       .run();

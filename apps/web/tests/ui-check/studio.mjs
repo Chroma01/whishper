@@ -37,39 +37,42 @@ async function checkPaneSeparator(page) {
   }
 }
 
-async function retranscribeUnavailableReason(page) {
+async function newTranscriptUnavailableReason(page) {
   if (await page.getByText("No source media is attached").count()) {
     return "the project has no source media";
   }
   const running = page.getByRole("progressbar", {
-    name: "Transcription progress",
+    name: /^New .*transcript progress$/,
   });
   return (await running.count()) ? "a transcription is running" : null;
 }
 
-async function checkRetranscribeDialog(page, theme) {
-  const trigger = page.getByRole("button", { name: "Re-transcribe" });
+async function checkNewTranscriptDialog(page, theme) {
+  const trigger = page.getByRole("button", {
+    name: "New transcript",
+    exact: true,
+  });
   if (!(await trigger.count())) {
-    const reason = await retranscribeUnavailableReason(page);
+    const reason = await newTranscriptUnavailableReason(page);
     if (!reason) {
       throw new Error(
-        "Re-transcribe is missing on a studio with a transcript, source media and no active run",
+        "New transcript is missing on a studio with a transcript, source media and no active run",
       );
     }
-    console.log(`SKIP re-transcribe dialog ${theme}: ${reason}`);
+    console.log(`SKIP new transcript dialog ${theme}: ${reason}`);
     return 0;
   }
   await trigger.focus();
   await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Re-transcribe" });
+  const dialog = page.getByRole("dialog", { name: "New transcript" });
   await dialog.waitFor();
   await animationsFinished(dialog);
   await page.screenshot({
-    path: `${outputDir}/studio-retranscribe-${theme}-1440.png`,
+    path: `${outputDir}/studio-new-transcript-${theme}-1440.png`,
   });
   let failures = reportViolations(
     await axeViolations(page, "dialog[open]"),
-    { name: "studio-retranscribe" },
+    { name: "studio-new-transcript" },
     theme,
     1440,
   );
@@ -78,8 +81,38 @@ async function checkRetranscribeDialog(page, theme) {
   await dialog.waitFor({ state: "hidden" });
   if (!(await isFocused(trigger))) {
     throw new Error(
-      "closing the re-transcribe dialog did not refocus its trigger",
+      "closing the new transcript dialog did not refocus its trigger",
     );
+  }
+  return failures;
+}
+
+async function checkTranscriptMenu(page, theme) {
+  const trigger = page
+    .getByRole("region", { name: "Subtitle cues" })
+    .getByRole("button", { name: /transcript$/ });
+  await openMenuWithKeyboard(page, trigger);
+  const menu = page.getByRole("menu", { name: "Transcripts" });
+  const checked = menu.locator('[role="menuitemradio"][aria-checked="true"]');
+  if ((await checked.count()) !== 1) {
+    throw new Error("the transcript menu does not mark the open transcript");
+  }
+  if (!(await isFocused(checked))) {
+    throw new Error("opening the transcript menu did not focus the open one");
+  }
+  await page.screenshot({
+    path: `${outputDir}/studio-transcripts-${theme}-1440.png`,
+  });
+  const failures = reportViolations(
+    await axeViolations(page, '[role="menu"]'),
+    { name: "studio-transcripts" },
+    theme,
+    1440,
+  );
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "hidden" });
+  if (!(await isFocused(trigger))) {
+    throw new Error("Escape did not return focus to the transcript menu");
   }
   return failures;
 }
@@ -97,6 +130,44 @@ async function checkExportMenu(page) {
   }
 }
 
+async function checkSpeedMenu(page) {
+  const trigger = page.getByRole("button", { name: /^Playback speed/ });
+  await openMenuWithKeyboard(page, trigger);
+  if ((await focusedText(page)) !== "1×") {
+    throw new Error("opening the speed menu did not focus the current speed");
+  }
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("menu", { name: "Playback speed" })
+    .waitFor({ state: "hidden" });
+  if (!(await isFocused(trigger))) {
+    throw new Error("Escape did not return focus to the speed trigger");
+  }
+}
+
+async function checkMediaDialog(page, theme) {
+  const trigger = page.getByRole("button", { name: "Project actions" });
+  await openMenuWithKeyboard(page, trigger);
+  await page.getByRole("menuitem", { name: "Media details…" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor();
+  await page.screenshot({
+    path: `${outputDir}/studio-media-${theme}-1440.png`,
+  });
+  const failures = reportViolations(
+    await axeViolations(page, "dialog[open]"),
+    { name: "studio-media" },
+    theme,
+    1440,
+  );
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  if (!(await isFocused(trigger))) {
+    throw new Error("closing the media dialog did not return focus");
+  }
+  return failures;
+}
+
 export async function checkStudioKeyboard(context, theme) {
   const page = await context.newPage();
   const label = `studio keyboard ${theme}`;
@@ -108,10 +179,13 @@ export async function checkStudioKeyboard(context, theme) {
       return 0;
     }
     await checkPaneSeparator(page);
-    const failures = await checkRetranscribeDialog(page, theme);
+    let failures = await checkNewTranscriptDialog(page, theme);
+    failures += await checkTranscriptMenu(page, theme);
     await checkExportMenu(page);
+    await checkSpeedMenu(page);
+    failures += await checkMediaDialog(page, theme);
     console.log(
-      `${label}: separator, re-transcribe dialog, pickers and export menu ok`,
+      `${label}: separator, new transcript dialog, pickers, transcript menu, export menu, speed menu and media dialog ok`,
     );
     return failures;
   } catch (error) {

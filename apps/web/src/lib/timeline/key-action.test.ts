@@ -19,9 +19,9 @@ const HANDLES: TimingPart[] = ["start", "end"];
 function action(
   event: TimelineKey,
   part: TimingPart,
-  { editable = true, dragging = false } = {},
+  { dragging = false } = {},
 ) {
-  return timelineKeyAction(event, part, editable, dragging);
+  return timelineKeyAction(event, part, dragging);
 }
 
 describe("timelineKeyAction", () => {
@@ -170,37 +170,6 @@ describe("timelineKeyAction", () => {
         expect(action(press("ArrowLeft"), part)).toEqual({ kind: "none" });
         expect(action(press("Home"), part)).toEqual({ kind: "none" });
       }
-    });
-  });
-
-  describe("while locked", () => {
-    const locked = { editable: false };
-
-    it("still navigates between cues", () => {
-      expect(action(press("ArrowRight"), "whole", locked)).toEqual({
-        kind: "navigate",
-        key: "ArrowRight",
-      });
-    });
-
-    it("claims Alt nudges without changing timing", () => {
-      expect(
-        action(press("ArrowLeft", { altKey: true }), "whole", locked),
-      ).toEqual({ kind: "block" });
-      expect(
-        action(
-          press("ArrowRight", { altKey: true, shiftKey: true }),
-          "whole",
-          locked,
-        ),
-      ).toEqual({ kind: "block" });
-    });
-
-    it("does nothing for brackets", () => {
-      expect(action(press("["), "whole", locked)).toEqual({ kind: "none" });
-      expect(action(press("]", { altKey: true }), "whole", locked)).toEqual({
-        kind: "none",
-      });
     });
   });
 });

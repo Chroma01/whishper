@@ -1,7 +1,13 @@
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { LANGUAGE_TAG, LANGUAGES, matchesLanguage } from "./languages";
+import {
+  LANGUAGE_TAG,
+  LANGUAGES,
+  languageFlag,
+  languageName,
+  matchesLanguage,
+} from "./languages";
 
 const COMMON_CODES = [
   "en",
@@ -106,5 +112,20 @@ describe("matchesLanguage", () => {
   it("matches language codes", () => {
     expect(matchesLanguage(language("yue"), "yue")).toBe(true);
     expect(matchesLanguage(language("jw"), "jw")).toBe(true);
+  });
+});
+
+describe("languageName", () => {
+  it("names a Whisper language, and shows any other code as it is", () => {
+    expect(languageName("es")).toBe("Spanish");
+    expect(languageName("jw")).toBe("Javanese");
+    expect(languageName("xx")).toBe("XX");
+  });
+});
+
+describe("languageFlag", () => {
+  it("finds a Whisper language's flag, and none for any other code", () => {
+    expect(languageFlag("en")).toBe("gb");
+    expect(languageFlag("xx")).toBeNull();
   });
 });

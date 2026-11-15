@@ -144,48 +144,6 @@ describe("Autosave", () => {
     expect(editor.autosave.state).toBe("conflict");
   });
 
-  it("reports a save refused during a transcription and keeps the edits", async () => {
-    const editor = editorWith("");
-    editor.type("a");
-    await vi.advanceTimersByTimeAsync(800);
-    await puts[0].respond(409, {
-      code: "transcription_running",
-      message: "A new transcription is running for this project.",
-    });
-
-    expect(editor.autosave.state).toBe("error");
-    expect(editor.autosave.message).toBe(
-      "A new transcription is running for this project.",
-    );
-    expect(editor.autosave.blockedByTranscription).toBe(true);
-    expect(editor.autosave.hasUnsavedChanges).toBe(true);
-    expect(JSON.parse(storage.get(journalKey) ?? "{}").cues[0].text).toBe("a");
-
-    editor.type("ab");
-    await vi.advanceTimersByTimeAsync(800);
-    await puts[1].respond(200, { revision: 2 });
-    expect(editor.autosave.blockedByTranscription).toBe(false);
-    expect(editor.autosave.state).toBe("saved");
-    expect(editor.autosave.message).toBe("");
-  });
-
-  it("leaves no journal behind once its edits are discarded", async () => {
-    const editor = editorWith("");
-    editor.type("a");
-    await vi.advanceTimersByTimeAsync(800);
-    const refusal = puts[0];
-
-    expect(editor.autosave.discardEdits()).toBe(true);
-    editor.autosave.dispose();
-    await refusal.respond(409, { code: "transcription_running" });
-    await vi.runAllTimersAsync();
-
-    expect(editor.autosave.hasUnsavedChanges).toBe(false);
-    expect(storage.has(journalKey)).toBe(false);
-    expect(puts).toHaveLength(1);
-    expect(editor.autosave.discardEdits()).toBe(false);
-  });
-
   it("treats a non-JSON 409 as a conflict", async () => {
     const editor = editorWith("");
     editor.type("a");
