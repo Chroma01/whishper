@@ -238,8 +238,7 @@
             onclick={(event) => rememberCursor(cue.id, event)}
             onkeyup={(event) => rememberCursor(cue.id, event)}
             onblur={() => editor.finishEdit()}
-            spellcheck="true"
-          ></textarea>
+            spellcheck="true"></textarea>
           {#if issues.length}
             <ul
               id={issuesId}
