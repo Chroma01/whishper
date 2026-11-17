@@ -2,7 +2,9 @@
 
 Anysub follows [Semantic Versioning](https://semver.org). The web and worker images always share one version. Each release lists what changed for the people who run and use Anysub.
 
-## [Unreleased]
+## [4.3.0] - 2026-11-17
+
+This release lets you pick the audio track to transcribe in files with several, keeps several transcripts per project, and gives the studio its own player controls.
 
 ### Added
 
@@ -154,6 +156,7 @@ Anysub 4.0.0 is the first release of the Whishper rewrite. It replaces Whishper 
 - More than one account.
 - ARM64 images.
 
+[4.3.0]: https://github.com/pluja/anysub/releases/tag/v4.3.0
 [4.2.0]: https://github.com/pluja/anysub/releases/tag/v4.2.0
 [4.1.0]: https://github.com/pluja/anysub/releases/tag/v4.1.0
 [4.0.3]: https://github.com/pluja/anysub/releases/tag/v4.0.3
