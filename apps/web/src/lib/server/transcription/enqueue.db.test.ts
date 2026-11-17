@@ -1,10 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AdapterModel, TranscriptionJobPayload } from "@anysub/contracts";
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+const testState = vi.hoisted(() => ({ dataRoot: "" }));
+
+vi.mock("#lib/server/env.ts", () => ({
+  privateEnv: {
+    databaseFile: ":memory:",
+    get dataRoot() {
+      return testState.dataRoot;
+    },
+  },
+}));
 
 import { db } from "#lib/server/db/index.ts";
 import { jobs, projects, transcriptionRuns } from "#lib/server/db/schema.ts";
@@ -21,6 +33,11 @@ import {
 } from "#lib/server/db/testing/remote.ts";
 import { workerArtifactsPath } from "#lib/server/storage/paths.ts";
 import { recordWorkerPresence } from "#lib/server/workers/presence.ts";
+
+beforeAll(async () => {
+  testState.dataRoot = await mkdtemp(join(tmpdir(), "anysub-enqueue-"));
+});
+afterAll(() => rm(testState.dataRoot, { recursive: true, force: true }));
 
 function connectWorker(optionsSchema: Record<string, unknown>): void {
   const model: AdapterModel = {

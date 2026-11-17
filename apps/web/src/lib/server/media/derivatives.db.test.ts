@@ -1,4 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+const testState = vi.hoisted(() => ({ dataRoot: "" }));
+
+vi.mock("#lib/server/env.ts", () => ({
+  privateEnv: {
+    databaseFile: ":memory:",
+    get dataRoot() {
+      return testState.dataRoot;
+    },
+  },
+}));
 
 import { db } from "#lib/server/db/index.ts";
 import { jobs, mediaDerivatives } from "#lib/server/db/schema.ts";
@@ -8,6 +23,11 @@ import {
   type SeededProject,
 } from "#lib/server/db/testing/fixtures.ts";
 import { removeAudioTrackCopyForUser } from "#lib/server/media/derivatives.ts";
+
+beforeAll(async () => {
+  testState.dataRoot = await mkdtemp(join(tmpdir(), "anysub-derivatives-"));
+});
+afterAll(() => rm(testState.dataRoot, { recursive: true, force: true }));
 
 function seedDerivative(
   project: SeededProject,

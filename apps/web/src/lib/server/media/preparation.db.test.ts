@@ -1,8 +1,20 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+const testState = vi.hoisted(() => ({ dataRoot: "" }));
+
+vi.mock("#lib/server/env.ts", () => ({
+  privateEnv: {
+    databaseFile: ":memory:",
+    get dataRoot() {
+      return testState.dataRoot;
+    },
+  },
+}));
 
 import { db } from "#lib/server/db/index.ts";
 import { jobs, projects } from "#lib/server/db/schema.ts";
@@ -20,6 +32,11 @@ import { workerArtifactsPath } from "#lib/server/storage/paths.ts";
 
 const SOURCE = "originals/episode.mkv";
 const AUDIO = { type: "audio", codec: "aac" };
+
+beforeAll(async () => {
+  testState.dataRoot = await mkdtemp(join(tmpdir(), "anysub-preparation-"));
+});
+afterAll(() => rm(testState.dataRoot, { recursive: true, force: true }));
 
 function seedMediaProject(read: boolean): SeededProject {
   const project = seedProject({
