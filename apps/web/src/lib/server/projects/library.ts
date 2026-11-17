@@ -2,7 +2,6 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Executor } from "#lib/server/db/index.ts";
 import {
-  cues,
   jobs,
   mediaDerivatives,
   mediaUploads,
@@ -15,31 +14,71 @@ import {
 import { projectForUser } from "#lib/server/projects/access.ts";
 import { IDLE_BEFORE_RETRY_MS } from "#lib/server/uploads/maintenance.ts";
 import { truncateText } from "#lib/shared/format.ts";
-import type {
-  LibrarySearch,
-  ProjectSummary,
-  WorkspaceSummary,
+import {
+  LIBRARY_ADDED,
+  LIBRARY_SORTS,
+  LIBRARY_STATUSES,
+  type LibraryAdded,
+  type LibraryProjectStatus,
+  type LibraryResults,
+  type LibrarySearch,
+  type ProjectSummary,
+  type WorkspaceSummary,
 } from "#lib/shared/library-data.ts";
+import { LANGUAGE_TAG } from "#lib/shared/languages.ts";
 import {
   PROJECT_SEARCH_MAX_LENGTH,
   PROJECT_TITLE_MAX_LENGTH,
 } from "#lib/shared/limits.ts";
-import type {
-  LibraryUploadStatus,
-  RunStatus,
-  UploadStatus,
+import {
+  libraryStatus,
+  type LibraryUploadStatus,
+  type RunStatus,
+  type UploadStatus,
 } from "#lib/shared/project-status.ts";
-import { matchesSearch, normalizeSearchText } from "#lib/shared/search.ts";
+import {
+  highlightQuery,
+  isEmptyQuery,
+  matchesQuery,
+  parseSearchQuery,
+  searchesTranscripts,
+  type SearchQuery,
+} from "#lib/shared/search-query.ts";
+import {
+  projectLanguages,
+  searchTranscripts,
+  type TranscriptMatches,
+} from "./library-search";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ADDED_WITHIN_DAYS: Record<LibraryAdded, number> = {
+  week: 7,
+  month: 30,
+  year: 365,
+};
+
+function oneOf<T extends string>(
+  values: readonly T[],
+  value: string | null,
+): T | null {
+  return values.find((candidate) => candidate === value) ?? null;
+}
 
 export function parseProjectLibrarySearch(
   searchParams: URLSearchParams,
 ): LibrarySearch {
+  const query = truncateText(
+    (searchParams.get("q") ?? "").trim(),
+    PROJECT_SEARCH_MAX_LENGTH,
+  );
+  const language = searchParams.get("language");
+  const sort = oneOf(LIBRARY_SORTS, searchParams.get("sort"));
   return {
-    query: truncateText(
-      (searchParams.get("q") ?? "").trim(),
-      PROJECT_SEARCH_MAX_LENGTH,
-    ),
-    includeSubtitles: searchParams.get("scope") === "subtitles",
+    query,
+    language: language && LANGUAGE_TAG.test(language) ? language : null,
+    status: oneOf(LIBRARY_STATUSES, searchParams.get("status")),
+    added: oneOf(LIBRARY_ADDED, searchParams.get("added")),
+    sort: sort ?? (query ? "relevance" : "activity"),
   };
 }
 
@@ -92,26 +131,6 @@ function latestSubtitleEdits(
     .groupBy(subtitleTracks.projectId)
     .all();
   return new Map(rows.map((row) => [row.projectId, new Date(row.updatedAt)]));
-}
-
-function projectsWithSubtitleText(
-  executor: Executor,
-  workspaceId: string,
-  query: string,
-): Set<string> {
-  const rows = executor
-    .selectDistinct({ projectId: subtitleTracks.projectId })
-    .from(cues)
-    .innerJoin(subtitleTracks, eq(subtitleTracks.id, cues.trackId))
-    .innerJoin(projects, eq(projects.id, subtitleTracks.projectId))
-    .where(
-      and(
-        eq(projects.workspaceId, workspaceId),
-        sql`instr(search_text(${cues.text}), ${normalizeSearchText(query)}) > 0`,
-      ),
-    )
-    .all();
-  return new Set(rows.map((row) => row.projectId));
 }
 
 type RunProgress = Pick<
@@ -209,12 +228,97 @@ const NO_RUN: RunProgress = {
   progressMessage: null,
 };
 
+function projectMatch(
+  name: string,
+  query: SearchQuery,
+  transcript: TranscriptMatches | undefined,
+): ProjectSummary["match"] {
+  const nameMatches = matchesQuery(name, query);
+  if (!nameMatches && !transcript) return null;
+  return {
+    nameSegments: nameMatches ? highlightQuery(name, query) : null,
+    hitCount: transcript?.hitCount ?? 0,
+    languages: [...(transcript?.languages ?? [])]
+      .map(([language, count]) => ({ language, count }))
+      .toSorted((a, b) => b.count - a.count),
+    hits: transcript?.hits ?? [],
+  };
+}
+
+function byActivity(a: ProjectSummary, b: ProjectSummary): number {
+  return (
+    b.activityAt.getTime() - a.activityAt.getTime() ||
+    b.createdAt.getTime() - a.createdAt.getTime()
+  );
+}
+
+// Name matches first, then the strongest transcript match, then the most hits.
+function byRelevance(
+  scores: Map<string, number>,
+): (a: ProjectSummary, b: ProjectSummary) => number {
+  const nameRank = (project: ProjectSummary) =>
+    project.match?.nameSegments ? 0 : 1;
+  return (a, b) =>
+    nameRank(a) - nameRank(b) ||
+    (scores.get(a.id) ?? 0) - (scores.get(b.id) ?? 0) ||
+    (b.match?.hitCount ?? 0) - (a.match?.hitCount ?? 0) ||
+    byActivity(a, b);
+}
+
+const COMPARE_NAMES = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+}).compare;
+
+function sortProjects(
+  projects: ProjectSummary[],
+  search: LibrarySearch,
+  scores: Map<string, number>,
+): ProjectSummary[] {
+  switch (search.sort) {
+    case "relevance":
+      return projects.toSorted(search.query ? byRelevance(scores) : byActivity);
+    case "added":
+      return projects.toSorted(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
+    case "name":
+      return projects.toSorted(
+        (a, b) => COMPARE_NAMES(a.name, b.name) || byActivity(a, b),
+      );
+    case "activity":
+      return projects.toSorted(byActivity);
+  }
+}
+
+function passesFilters(
+  project: ProjectSummary,
+  search: LibrarySearch,
+  now: Date,
+): boolean {
+  if (search.language && !project.languages.includes(search.language)) {
+    return false;
+  }
+  if (search.status && libraryStatus(project) !== search.status) return false;
+  if (search.added) {
+    const since = now.getTime() - ADDED_WITHIN_DAYS[search.added] * DAY_MS;
+    if (project.createdAt.getTime() < since) return false;
+  }
+  return true;
+}
+
+function hasFilters(search: LibrarySearch): boolean {
+  return (
+    search.language !== null || search.status !== null || search.added !== null
+  );
+}
+
 export function listLibraryProjects(
   executor: Executor,
   workspaceId: string,
   search: LibrarySearch,
   now = new Date(),
-): ProjectSummary[] {
+): LibraryResults {
   const rows = executor
     .select({
       id: projects.id,
@@ -236,15 +340,19 @@ export function listLibraryProjects(
     .all();
   const projectIds = rows.map((row) => row.id);
   const subtitleEdits = latestSubtitleEdits(executor, workspaceId);
-  const subtitleMatches =
-    search.includeSubtitles && search.query !== ""
-      ? projectsWithSubtitleText(executor, workspaceId, search.query)
-      : new Set<string>();
   const runs = latestRunProgress(executor, projectIds);
   const thumbnails = thumbnailProjects(executor, projectIds);
+  const languages = projectLanguages(executor, workspaceId);
+  const query = parseSearchQuery(search.query);
+  const hasQuery = !isEmptyQuery(query);
+  const needsTerm = hasQuery && query.terms.length === 0;
+  const transcripts =
+    hasQuery && !needsTerm && searchesTranscripts(query)
+      ? searchTranscripts(executor, workspaceId, query, search.language)
+      : new Map<string, TranscriptMatches>();
 
-  return rows
-    .map(({ updatedAt, uploadUpdatedAt, ...row }) => {
+  const all: ProjectSummary[] = rows.map(
+    ({ updatedAt, uploadUpdatedAt, ...row }) => {
       const subtitleEdit = subtitleEdits.get(row.id);
       const activityAt =
         subtitleEdit && subtitleEdit > updatedAt ? subtitleEdit : updatedAt;
@@ -258,18 +366,77 @@ export function listLibraryProjects(
         ),
         activityAt,
         hasThumbnail: thumbnails.has(row.id),
-        subtitleMatch: subtitleMatches.has(row.id),
+        languages: languages.get(row.id) ?? [],
+        match: hasQuery
+          ? projectMatch(row.name, query, transcripts.get(row.id))
+          : null,
       };
-    })
-    .filter(
-      (project) =>
-        project.subtitleMatch || matchesSearch(search.query, [project.name]),
-    )
-    .toSorted(
-      (a, b) =>
-        b.activityAt.getTime() - a.activityAt.getTime() ||
-        b.createdAt.getTime() - a.createdAt.getTime(),
-    );
+    },
+  );
+  const matching = hasQuery
+    ? all.filter((project) => !needsTerm && project.match !== null)
+    : all;
+  const filtered = matching.filter((project) =>
+    passesFilters(project, search, now),
+  );
+  const scores = new Map(
+    [...transcripts].map(([id, match]) => [id, match.bestScore]),
+  );
+  return {
+    projects: sortProjects(filtered, search, scores),
+    unfilteredCount:
+      filtered.length === 0 && hasFilters(search)
+        ? unfilteredMatchCount(executor, workspaceId, query, all)
+        : filtered.length,
+    needsTerm,
+  };
+}
+
+export function listLibraryStatuses(
+  executor: Executor,
+  workspaceId: string,
+): LibraryProjectStatus[] {
+  const everything: LibrarySearch = {
+    query: "",
+    language: null,
+    status: null,
+    added: null,
+    sort: "activity",
+  };
+  return listLibraryProjects(executor, workspaceId, everything).projects.map(
+    (project) => ({
+      id: project.id,
+      runStatus: project.runStatus,
+      jobState: project.jobState,
+      progress: project.progress,
+      progressMessage: project.progressMessage,
+      uploadStatus: project.uploadStatus,
+      receivedBytes: project.receivedBytes,
+      sizeBytes: project.sizeBytes,
+      mediaPreparationStatus: project.mediaPreparationStatus,
+      mediaDurationUs: project.mediaDurationUs,
+      hasThumbnail: project.hasThumbnail,
+    }),
+  );
+}
+
+// Without the language filter a query can match more transcripts, so they
+// are searched again.
+function unfilteredMatchCount(
+  executor: Executor,
+  workspaceId: string,
+  query: SearchQuery,
+  all: ProjectSummary[],
+): number {
+  if (isEmptyQuery(query)) return all.length;
+  if (query.terms.length === 0) return 0;
+  const transcripts = searchesTranscripts(query)
+    ? searchTranscripts(executor, workspaceId, query, null)
+    : new Map<string, TranscriptMatches>();
+  return all.filter(
+    (project) =>
+      transcripts.has(project.id) || matchesQuery(project.name, query),
+  ).length;
 }
 
 export function renameProjectForUser(

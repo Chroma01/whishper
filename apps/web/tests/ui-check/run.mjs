@@ -13,6 +13,7 @@ import {
   widths,
 } from "./shared.mjs";
 import { checkCreateProjectDialog } from "./create-project.mjs";
+import { checkLibrarySearch } from "./library-search.mjs";
 import { checkStudioCues, checkStudioKeyboard } from "./studio.mjs";
 
 const email = process.env.UI_CHECK_EMAIL;
@@ -288,6 +289,7 @@ for (const theme of themes) {
       failures += await checkThemeMenuKeyboard(context, theme);
       failures += await checkLongProjectName(context, theme);
       failures += await checkCreateProjectDialog(context, theme);
+      failures += await checkLibrarySearch(context, theme);
       failures += await checkStudioKeyboard(context, theme);
       failures += await checkStudioCues(context, theme);
     }

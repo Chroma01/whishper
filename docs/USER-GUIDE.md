@@ -18,7 +18,12 @@ To delete a project, use the menu in the studio's title bar. This removes its me
 
 ## Finding projects
 
-The library search matches project names. Tick **Subtitle text** to search the subtitles as well.
+Type in the search box above your projects, or press `/` to jump to it. It searches project names and every transcript as you type, ignoring case and accents. Each project lists its matching lines with their times. Click a line to open the studio there, with the find bar showing the match.
+
+- Put words in quotes to match them as a phrase: `"space station"`.
+- Put a minus before a word to leave it out: `station -crew`.
+
+The filters narrow the list by transcript language, status, or the date the project was added. The results can be sorted by best match, last edited, date added, or name.
 
 ## Transcribing
 
@@ -119,6 +124,12 @@ You can:
 
 Changing a subtitle's text, or only its start or end, removes its word timings. Moving the whole subtitle keeps them.
 
+### Find and replace
+
+Press `Ctrl/Command+F`, or use the search button at the end of the editing toolbar, to find text in the open transcript. It ignores case and accents. `Enter` and `Shift+Enter` move between matches, and the playhead follows. **Aa** matches case exactly, **ab** finds whole words only, and **.\*** takes a regular expression.
+
+To replace, open the second row with the arrow next to the box, or press `Ctrl+H` (`Command+Option+F` on a Mac). **Replace all** counts as one edit, so one undo reverses it.
+
 ### Timing fields
 
 Times are always `HH:MM:SS.mmm`, and typing overwrites digits in place:
@@ -149,6 +160,8 @@ Press `?`, or use the **Shortcuts** button, to see them all.
 | `Ctrl/Command+Z`                         | Undo                                                     |
 | `Ctrl/Command+Shift+Z`, `Ctrl/Command+Y` | Redo                                                     |
 | `Ctrl/Command+S`                         | Save now                                                 |
+| `Ctrl/Command+F`                         | Find in the transcript                                   |
+| `Ctrl+H`, `Command+Option+F` on a Mac    | Find and replace                                         |
 
 Single-key shortcuts don't fire while you type in a text field.
 

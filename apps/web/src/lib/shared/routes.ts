@@ -20,12 +20,28 @@ export function projectPageUrl(projectId: string, trackId?: string): string {
     : `/projects/${projectId}`;
 }
 
+// Opens the studio on one cue, with the find bar showing the search.
+export function projectCueUrl(
+  projectId: string,
+  trackId: string,
+  cueId: string,
+  query: string,
+): string {
+  const params = new URLSearchParams({ cue: cueId });
+  if (query) params.set("q", query);
+  return `${projectPageUrl(projectId, trackId)}?${params}`;
+}
+
 function projectApiUrl(projectId: string): string {
   return `/api/projects/${projectId}`;
 }
 
 export function projectMediaUrl(projectId: string): string {
   return `${projectApiUrl(projectId)}/media`;
+}
+
+export function libraryStatusUrl(): string {
+  return "/api/library/status";
 }
 
 export function projectStatusUrl(projectId: string): string {

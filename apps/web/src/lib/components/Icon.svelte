@@ -59,6 +59,8 @@
     expand,
     mute,
     "audio-lines": audioLines,
+    "chevron-up": chevronUp,
+    replace,
     target,
     upload,
     database,
@@ -120,6 +122,12 @@
 {/snippet}
 {#snippet chevronDown()}
   <path d="m7 9.5 5 5 5-5" />
+{/snippet}
+{#snippet chevronUp()}
+  <path d="m7 14.5 5-5 5 5" />
+{/snippet}
+{#snippet replace()}
+  <path d="M4 7h11l-3-3M20 17H9l3 3" />
 {/snippet}
 {#snippet play()}
   <path d="m9 7 8 5-8 5z" />

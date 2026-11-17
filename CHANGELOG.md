@@ -2,6 +2,17 @@
 
 Anysub follows [Semantic Versioning](https://semver.org). The web and worker images always share one version. Each release lists what changed for the people who run and use Anysub.
 
+## [Unreleased]
+
+### Added
+
+- Search looks inside every transcript as well as project names, and lists each matching line with its time. Clicking a line opens the studio there. Put words in quotes for a phrase, or a minus before a word to leave it out. Filters narrow the list by language, status and date added, and the results can be sorted. Press `/` to jump to the search box.
+- Find and replace in the studio, with `Ctrl/Command+F`. It can match case, whole words or a regular expression, and one undo reverses a **Replace all**.
+
+### Changed
+
+- The library's **Subtitle text** checkbox is gone: search always includes transcripts.
+
 ## [4.3.0] - 2026-11-17
 
 This release lets you pick the audio track to transcribe in files with several, keeps several transcripts per project, and gives the studio its own player controls.

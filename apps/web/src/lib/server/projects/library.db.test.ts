@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { db } from "#lib/server/db/index.ts";
@@ -8,6 +8,7 @@ import {
   cues,
   mediaUploads,
   projects as projectsTable,
+  subtitleTracks,
 } from "#lib/server/db/schema.ts";
 import { seedProject, seedTrack } from "#lib/server/db/testing/fixtures.ts";
 import {
@@ -15,6 +16,15 @@ import {
   primaryWorkspaceForUser,
   renameProjectForUser,
 } from "#lib/server/projects/library.ts";
+import type { LibrarySearch } from "#lib/shared/library-data.ts";
+
+const NO_SEARCH: LibrarySearch = {
+  query: "",
+  language: null,
+  status: null,
+  added: null,
+  sort: "activity",
+};
 
 function projectName(projectId: string): string | undefined {
   return db
@@ -65,9 +75,9 @@ describe("project library", () => {
       listLibraryProjects(
         db,
         project.workspaceId,
-        { query: "", includeSubtitles: false },
+        NO_SEARCH,
         new Date(lastProgressAt.getTime() + minutesLater * 60_000),
-      )[0].uploadStatus;
+      ).projects[0].uploadStatus;
 
     expect(uploadStatusAt(9)).toBe("uploading");
     expect(uploadStatusAt(10)).toBe("paused");
@@ -85,10 +95,11 @@ describe("project library", () => {
       projectCount: 1,
       readySourceCount: 0,
     });
-    const projects = listLibraryProjects(db, project.workspaceId, {
-      query: "",
-      includeSubtitles: false,
-    });
+    const { projects } = listLibraryProjects(
+      db,
+      project.workspaceId,
+      NO_SEARCH,
+    );
     expect(projects).toHaveLength(1);
     expect(projects[0]).toMatchObject({
       id: project.projectId,
@@ -98,53 +109,317 @@ describe("project library", () => {
 });
 
 describe("project library search", () => {
-  function seedNamedProject(name: string, cueText: string) {
-    const project = seedProject();
-    db.update(projectsTable)
-      .set({ name })
-      .where(eq(projectsTable.id, project.projectId))
-      .run();
-    db.insert(cues)
+  type CueSeed = { text: string; startUs?: number };
+
+  function addProject(
+    owner: { workspaceId: string; userId: string },
+    name: string,
+    tracks: Record<string, CueSeed[]> = {},
+    createdAt = new Date(),
+  ): string {
+    const projectId = db
+      .insert(projectsTable)
       .values({
-        trackId: seedTrack(project.projectId),
-        position: 0,
-        startUs: 0,
-        endUs: 1_000_000,
-        text: cueText,
+        workspaceId: owner.workspaceId,
+        name,
+        createdBy: owner.userId,
+        createdAt,
       })
-      .run();
-    return project;
+      .returning({ id: projectsTable.id })
+      .get().id;
+    for (const [language, seeds] of Object.entries(tracks)) {
+      const trackId = db
+        .insert(subtitleTracks)
+        .values({ projectId, name: language, language })
+        .returning({ id: subtitleTracks.id })
+        .get().id;
+      db.insert(cues)
+        .values(
+          seeds.map((seed, position) => ({
+            trackId,
+            position,
+            startUs: seed.startUs ?? position * 1_000_000,
+            endUs: (seed.startUs ?? position * 1_000_000) + 900_000,
+            text: seed.text,
+          })),
+        )
+        .run();
+    }
+    return projectId;
   }
 
-  const foundNames = (
-    workspaceId: string,
-    query: string,
-    includeSubtitles: boolean,
-  ) =>
-    listLibraryProjects(db, workspaceId, { query, includeSubtitles }).map(
-      (project) => project.name,
-    );
+  function search(workspaceId: string, values: Partial<LibrarySearch>) {
+    return listLibraryProjects(db, workspaceId, {
+      ...NO_SEARCH,
+      sort: values.query ? "relevance" : "activity",
+      ...values,
+    });
+  }
 
-  it("matches titles regardless of case and accents", () => {
-    const project = seedNamedProject("Entrevista Café", "Hola");
+  const names = (workspaceId: string, values: Partial<LibrarySearch>) =>
+    search(workspaceId, values).projects.map((project) => project.name);
 
-    expect(foundNames(project.workspaceId, "cafe", false)).toEqual([
+  it("searches names and transcripts, ignoring case and accents", () => {
+    const owner = seedProject();
+    addProject(owner, "Entrevista Café");
+    addProject(owner, "Interview", {
+      es: [{ text: "Él habló de la canción" }],
+    });
+
+    expect(names(owner.workspaceId, { query: "cafe" })).toEqual([
       "Entrevista Café",
     ]);
-    expect(foundNames(project.workspaceId, "ÉNTREVISTA", false)).toEqual([
-      "Entrevista Café",
+    expect(names(owner.workspaceId, { query: "CANCION" })).toEqual([
+      "Interview",
     ]);
   });
 
-  it("matches subtitle text regardless of case and accents only when asked", () => {
-    const project = seedNamedProject("Interview", "Él habló de la canción");
+  it("highlights the name and each matching line with its time", () => {
+    const owner = seedProject();
+    addProject(owner, "Crew call", {
+      en: [
+        { text: "Welcome aboard the station", startUs: 5_000_000 },
+        { text: "Nothing here", startUs: 6_000_000 },
+        { text: "The crew sleeps on the station", startUs: 9_000_000 },
+      ],
+    });
 
-    expect(foundNames(project.workspaceId, "cancion", true)).toEqual([
-      "Interview",
+    const [project] = search(owner.workspaceId, { query: "station" }).projects;
+
+    expect(project.match).toMatchObject({
+      nameSegments: null,
+      hitCount: 2,
+      languages: [{ language: "en", count: 2 }],
+    });
+    expect(
+      project.match?.hits.map((hit) => [hit.startUs, hit.segments]),
+    ).toEqual([
+      [
+        5_000_000,
+        [
+          { text: "Welcome aboard the ", match: false },
+          { text: "station", match: true },
+        ],
+      ],
+      [
+        9_000_000,
+        [
+          { text: "The crew sleeps on the ", match: false },
+          { text: "station", match: true },
+        ],
+      ],
     ]);
-    expect(foundNames(project.workspaceId, "EL HABLO", true)).toEqual([
-      "Interview",
+    expect(
+      search(owner.workspaceId, { query: "crew" }).projects[0].match
+        ?.nameSegments,
+    ).toEqual([
+      { text: "Crew", match: true },
+      { text: " call", match: false },
     ]);
-    expect(foundNames(project.workspaceId, "cancion", false)).toEqual([]);
+  });
+
+  it("counts a line repeated by another transcript of the project once", () => {
+    const owner = seedProject();
+    const projectId = addProject(owner, "Twice", {
+      en: [{ text: "orbit", startUs: 2_000_000 }],
+    });
+    const trackId = db
+      .insert(subtitleTracks)
+      .values({ projectId, name: "Again", language: "en" })
+      .returning({ id: subtitleTracks.id })
+      .get().id;
+    db.insert(cues)
+      .values([
+        {
+          trackId,
+          position: 0,
+          startUs: 2_400_000,
+          endUs: 3_000_000,
+          text: "orbit",
+        },
+        {
+          trackId,
+          position: 1,
+          startUs: 9_000_000,
+          endUs: 9_500_000,
+          text: "orbit",
+        },
+      ])
+      .run();
+
+    const { match } = search(owner.workspaceId, { query: "orbit" }).projects[0];
+
+    expect(match?.hitCount).toBe(2);
+    expect(match?.hits.map((hit) => hit.startUs)).toEqual([
+      2_000_000, 9_000_000,
+    ]);
+  });
+
+  it("fills the listed lines after collapsing repeats, not before", () => {
+    const owner = seedProject();
+    const lines = Array.from({ length: 25 }, (_, index) => ({
+      text: `orbit ${index}`,
+      startUs: index * 5_000_000,
+    }));
+    const projectId = addProject(owner, "Twice", { en: lines });
+    const copyId = db
+      .insert(subtitleTracks)
+      .values({ projectId, name: "Copy", language: "en" })
+      .returning({ id: subtitleTracks.id })
+      .get().id;
+    db.insert(cues)
+      .values(
+        lines.map((line, position) => ({
+          trackId: copyId,
+          position,
+          startUs: line.startUs,
+          endUs: line.startUs + 1_000_000,
+          text: line.text,
+        })),
+      )
+      .run();
+
+    const { match } = search(owner.workspaceId, { query: "orbit" }).projects[0];
+
+    expect(match?.hitCount).toBe(25);
+    expect(match?.hits).toHaveLength(20);
+  });
+
+  it("keeps the triggers that update the index, which a table rebuild drops", () => {
+    const triggers = db
+      .all<{ name: string }>(
+        sql`select name from sqlite_master where type = 'trigger' and tbl_name = 'cues' order by name`,
+      )
+      .map((row) => row.name);
+
+    expect(triggers).toEqual([
+      "cues_search_delete",
+      "cues_search_insert",
+      "cues_search_update",
+    ]);
+  });
+
+  it("matches the word being typed, phrases as written, and leaves out excluded words", () => {
+    const owner = seedProject();
+    addProject(owner, "One", { en: [{ text: "the space station" }] });
+    addProject(owner, "Two", { en: [{ text: "station of space" }] });
+
+    expect(names(owner.workspaceId, { query: "spa" })).toHaveLength(2);
+    expect(names(owner.workspaceId, { query: '"space station"' })).toEqual([
+      "One",
+    ]);
+    expect(names(owner.workspaceId, { query: "station -the" })).toEqual([
+      "Two",
+    ]);
+  });
+
+  it("asks for a word when the query only excludes", () => {
+    const owner = seedProject();
+    addProject(owner, "One", { en: [{ text: "station" }] });
+
+    expect(search(owner.workspaceId, { query: "-station" })).toMatchObject({
+      projects: [],
+      needsTerm: true,
+    });
+  });
+
+  it("keeps the index in step with edited and deleted lines", () => {
+    const owner = seedProject();
+    const projectId = addProject(owner, "One", {
+      en: [{ text: "old words" }],
+    });
+
+    db.update(cues).set({ text: "new words" }).run();
+    expect(names(owner.workspaceId, { query: "old" })).toEqual([]);
+    expect(names(owner.workspaceId, { query: "new" })).toEqual(["One"]);
+
+    db.delete(subtitleTracks)
+      .where(eq(subtitleTracks.projectId, projectId))
+      .run();
+    expect(names(owner.workspaceId, { query: "new" })).toEqual([]);
+  });
+
+  it("finds words inside Chinese and Japanese text", () => {
+    const owner = seedProject();
+    addProject(owner, "One", {
+      ja: [{ text: "国際宇宙ステーションへようこそ" }],
+    });
+
+    const [project] = search(owner.workspaceId, { query: "宇宙" }).projects;
+
+    expect(project.match?.hits[0].segments).toEqual([
+      { text: "国際", match: false },
+      { text: "宇宙", match: true },
+      { text: "ステーションへようこそ", match: false },
+    ]);
+  });
+
+  it("ranks name matches first, then the strongest transcript match", () => {
+    const owner = seedProject();
+    addProject(owner, "Once", { en: [{ text: "orbit" }] });
+    addProject(owner, "Often", {
+      en: [{ text: "orbit" }, { text: "orbit again" }, { text: "orbit" }],
+    });
+    addProject(owner, "Orbit notes");
+
+    expect(names(owner.workspaceId, { query: "orbit" })).toEqual([
+      "Orbit notes",
+      "Often",
+      "Once",
+    ]);
+    expect(names(owner.workspaceId, { query: "orbit", sort: "name" })).toEqual([
+      "Often",
+      "Once",
+      "Orbit notes",
+    ]);
+  });
+
+  it("filters by language, counting only that language's lines", () => {
+    const owner = seedProject();
+    addProject(owner, "Both", {
+      en: [{ text: "station" }],
+      es: [{ text: "station", startUs: 5_000_000 }],
+    });
+    addProject(owner, "English", { en: [{ text: "station" }] });
+
+    const results = search(owner.workspaceId, {
+      query: "station",
+      language: "es",
+    });
+
+    expect(results.projects.map((project) => project.name)).toEqual(["Both"]);
+    expect(results.projects[0].match).toMatchObject({
+      hitCount: 1,
+      languages: [{ language: "es", count: 1 }],
+    });
+    expect(results.projects[0].languages).toEqual(["en", "es"]);
+  });
+
+  it("filters by date added, and counts what the filters hide", () => {
+    const owner = seedProject();
+    const now = new Date("2026-06-01T00:00:00Z");
+    addProject(
+      owner,
+      "Old",
+      { en: [{ text: "orbit" }] },
+      new Date("2025-01-01"),
+    );
+
+    const filtered = listLibraryProjects(
+      db,
+      owner.workspaceId,
+      { ...NO_SEARCH, query: "orbit", added: "month", sort: "relevance" },
+      now,
+    );
+
+    expect(filtered).toMatchObject({ projects: [], unfilteredCount: 1 });
+  });
+
+  it("only searches the user's workspace", () => {
+    const owner = seedProject();
+    const stranger = seedProject();
+    addProject(stranger, "Theirs", { en: [{ text: "station" }] });
+
+    expect(names(owner.workspaceId, { query: "station" })).toEqual([]);
   });
 });

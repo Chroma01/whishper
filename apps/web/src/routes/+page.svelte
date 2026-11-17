@@ -11,11 +11,16 @@
   import Icon from "#lib/components/Icon.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import Input from "#lib/components/ui/Input.svelte";
-  import { buttonClasses } from "#lib/components/ui/variants.ts";
+  import LibrarySearchBar from "#lib/library/LibrarySearchBar.svelte";
+  import { libraryUrl } from "#lib/library/search-url.ts";
+  import { refreshAll } from "$app/navigation";
   import { pollWhileActive } from "#lib/browser/polling.svelte.ts";
+  import type {
+    LibraryProjectStatus,
+    ProjectSummary,
+  } from "#lib/shared/library-data.ts";
+  import { libraryStatusUrl } from "#lib/shared/routes.ts";
   import { pluralize } from "#lib/shared/format.ts";
-  import { PROJECT_SEARCH_MAX_LENGTH } from "#lib/shared/limits.ts";
   import { isProjectActive } from "#lib/shared/project-status.ts";
 
   let { data, form } = $props();
@@ -25,23 +30,70 @@
   let dragHasMedia = $state(true);
   let dropMessage = $state("");
   let now = $state(new Date());
-  let hasActiveSearch = $derived(
-    data.search.query.length > 0 || data.search.includeSubtitles,
+  // Progress polled since the last load, so a search is not run again just
+  // to move a progress bar.
+  let polledStatuses = $state.raw<{
+    loaded: ProjectSummary[];
+    statuses: Map<string, LibraryProjectStatus>;
+  } | null>(null);
+  let projects = $derived.by(() => {
+    if (polledStatuses?.loaded !== data.projects) return data.projects;
+    const { statuses } = polledStatuses;
+    return data.projects.map((project) => ({
+      ...project,
+      ...statuses.get(project.id),
+    }));
+  });
+  let hasFilters = $derived(
+    data.search.language !== null ||
+      data.search.status !== null ||
+      data.search.added !== null,
+  );
+  let hasActiveSearch = $derived(data.search.query.length > 0 || hasFilters);
+  let lineCount = $derived(
+    projects.reduce(
+      (total, project) => total + (project.match?.hitCount ?? 0),
+      0,
+    ),
+  );
+  let resultSummary = $derived(
+    [
+      pluralize(projects.length, "project"),
+      lineCount > 0 ? pluralize(lineCount, "matching line") : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
   );
   let firstThumbnailIndex = $derived(
-    data.projects.findIndex((project) => project.hasThumbnail),
+    projects.findIndex((project) => project.hasThumbnail),
   );
-  let hasActiveJob = $derived(data.projects.some(isProjectActive));
+  let hasActiveJob = $derived(projects.some(isProjectActive));
   let renameActionUrl = $derived.by(() => {
-    const search = new URLSearchParams();
-    if (data.search.query) search.set("q", data.search.query);
-    if (data.search.includeSubtitles) search.set("scope", "subtitles");
-    const query = search.toString();
-    return query ? `?${query}&/renameProject` : "?/renameProject";
+    const url = libraryUrl(data.search);
+    return url === "/" ? "?/renameProject" : `${url}&/renameProject`;
   });
   let acceptsDrops = $derived(data.workspace !== null && !createDialogOpen);
 
-  pollWhileActive(() => hasActiveJob, 2_000);
+  pollWhileActive(
+    () => hasActiveJob,
+    2_000,
+    () => (data.search.query ? pollStatuses() : refreshAll()),
+  );
+
+  // A finished job can add transcript text, so the search runs again then.
+  async function pollStatuses(): Promise<void> {
+    const loaded = data.projects;
+    const response = await fetch(libraryStatusUrl());
+    if (!response.ok) return refreshAll();
+    const list = (await response.json()) as LibraryProjectStatus[];
+    const statuses = new Map(list.map((status) => [status.id, status]));
+    const finished = projects.some((project) => {
+      const next = statuses.get(project.id);
+      return isProjectActive(project) && next && !isProjectActive(next);
+    });
+    if (finished) return refreshAll();
+    polledStatuses = { loaded, statuses };
+  }
 
   $effect(() => {
     const timer = window.setInterval(() => (now = new Date()), 60_000);
@@ -133,60 +185,9 @@
     {/if}
   </header>
 
-  <form
-    class="mt-6 flex flex-wrap items-center gap-2"
-    method="GET"
-    action="/"
-    role="search"
-  >
-    <div
-      class="relative min-w-0 basis-full sm:max-w-md sm:flex-1 sm:basis-auto"
-    >
-      <span
-        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-subtle"
-        aria-hidden="true"
-      >
-        <Icon name="search" size={16} />
-      </span>
-      <Input
-        type="search"
-        name="q"
-        autocomplete="off"
-        value={data.search.query}
-        placeholder="Search projects"
-        aria-label="Search projects"
-        maxlength={PROJECT_SEARCH_MAX_LENGTH}
-        class="pr-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
-      />
-      {#if hasActiveSearch}
-        <a
-          href="/"
-          aria-label="Clear search"
-          title="Clear search"
-          class="{buttonClasses(
-            'ghost',
-            'sm',
-            true,
-          )} absolute top-1/2 right-0.5 size-8 -translate-y-1/2"
-        >
-          <Icon name="close" size={14} />
-        </a>
-      {/if}
-    </div>
-    <label
-      class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-sm text-text transition-colors duration-150 hover:bg-surface-sunken has-checked:border-accent has-checked:bg-accent-soft motion-reduce:transition-none"
-    >
-      <input
-        type="checkbox"
-        name="scope"
-        value="subtitles"
-        checked={data.search.includeSubtitles}
-        class="size-4 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-      />
-      Subtitle text
-    </label>
-    <Button type="submit">Search</Button>
-  </form>
+  {#if data.workspace && (data.workspace.projectCount > 0 || hasActiveSearch)}
+    <LibrarySearchBar search={data.search} languages={data.languages} />
+  {/if}
 
   {#if data.workspace}
     <CreateProjectDialog
@@ -202,36 +203,60 @@
       class="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
     >
       <h2 id="project-list-title" class="text-sm font-medium text-text">
-        {hasActiveSearch ? "Search results" : "All projects"}
+        {data.search.query ? "Results" : "All projects"}
       </h2>
-      <p class="text-xs text-text-muted">
-        {pluralize(data.projects.length, "project")}
-        {#if data.search.query && data.search.includeSubtitles}
-          matching project titles or subtitle text for “{data.search.query}”
-        {:else if data.search.query}
-          matching project titles for “{data.search.query}”
-        {:else if data.search.includeSubtitles}
-          in this workspace. Subtitle text will be included when you search.
-        {:else}
-          ordered by recent activity
-        {/if}
-      </p>
+      <p class="text-xs text-text-muted">{resultSummary}</p>
     </div>
 
-    {#if data.projects.length === 0 && hasActiveSearch}
+    {#if data.needsTerm}
+      <EmptyState icon="search" title="Add a word to look for" tone="accent">
+        <p>
+          Words with a minus are left out of the results. Add at least one word
+          to search for.
+        </p>
+      </EmptyState>
+    {:else if projects.length === 0 && hasActiveSearch}
       <EmptyState
         icon="search"
-        title="No projects match this search"
+        title={data.search.query
+          ? `No results for “${data.search.query}”`
+          : "No projects match these filters"}
         tone="accent"
       >
-        <p>
-          {data.search.includeSubtitles
-            ? "Try a shorter project title or subtitle phrase."
-            : "Try another title or include subtitle text in your search."}
-        </p>
-        <Button href="/">Clear search</Button>
+        {#if hasFilters && data.unfilteredCount > 0}
+          <p>
+            Clearing the filters shows {pluralize(
+              data.unfilteredCount,
+              "project",
+            )}.
+          </p>
+          <Button
+            href={libraryUrl({
+              ...data.search,
+              language: null,
+              status: null,
+              added: null,
+            })}
+          >
+            Clear filters
+          </Button>
+        {:else}
+          <p>Nothing in project names or transcripts matches.</p>
+          {#if data.search.query.includes('"')}
+            <Button
+              href={libraryUrl({
+                ...data.search,
+                query: data.search.query.replaceAll('"', ""),
+              })}
+            >
+              Search without quotes
+            </Button>
+          {:else}
+            <Button href="/">Clear search</Button>
+          {/if}
+        {/if}
       </EmptyState>
-    {:else if data.projects.length === 0}
+    {:else if projects.length === 0}
       <EmptyState icon="subtitles" title="No projects yet" tone="accent">
         {#if data.workspace}
           {@render newProjectButton()}
@@ -250,13 +275,14 @@
           <span>Last edited</span>
         </div>
         <ul class="divide-y divide-border">
-          {#each data.projects as project, index (project.id)}
+          {#each projects as project, index (project.id)}
             <ProjectRow
               {project}
               {form}
               {now}
               eagerThumbnail={index === firstThumbnailIndex}
               renameAction={renameActionUrl}
+              query={data.search.query}
             />
           {/each}
         </ul>
@@ -266,6 +292,9 @@
 </div>
 
 <p class="sr-only" role="status">{dropMessage}</p>
+<p class="sr-only" role="status">
+  {data.search.query ? resultSummary : ""}
+</p>
 
 {#if dragDepth > 0}
   <div

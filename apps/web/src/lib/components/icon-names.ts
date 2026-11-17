@@ -56,4 +56,6 @@ export type IconName =
   | "words"
   | "mute"
   | "expand"
-  | "audio-lines";
+  | "audio-lines"
+  | "chevron-up"
+  | "replace";

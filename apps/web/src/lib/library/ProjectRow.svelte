@@ -13,7 +13,7 @@
   import { enhance, type SubmitFunction } from "$app/forms";
   import { goto } from "$app/navigation";
   import Icon from "#lib/components/Icon.svelte";
-  import Badge from "#lib/components/ui/Badge.svelte";
+  import HighlightedText from "#lib/components/ui/HighlightedText.svelte";
   import IconButton from "#lib/components/ui/IconButton.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Menu from "#lib/components/ui/Menu.svelte";
@@ -28,7 +28,9 @@
     projectSourceFallback,
   } from "#lib/shared/project-status.ts";
   import { projectDerivativeUrl, projectPageUrl } from "#lib/shared/routes.ts";
+  import { languageFlag, languageName } from "#lib/shared/languages.ts";
   import { mediaPlaceholder } from "./media-placeholder";
+  import ProjectMatches from "./ProjectMatches.svelte";
 
   type RenameForm = { renameProjectId?: string; renameError?: string } | null;
   type Props = {
@@ -37,9 +39,11 @@
     eagerThumbnail: boolean;
     renameAction: string;
     form: RenameForm;
+    query: string;
   };
 
-  let { project, now, eagerThumbnail, renameAction, form }: Props = $props();
+  let { project, now, eagerThumbnail, renameAction, form, query }: Props =
+    $props();
 
   // svelte-ignore state_referenced_locally
   const failedRename = form?.renameProjectId === project.id ? form : null;
@@ -182,15 +186,31 @@
           title={project.name}
           class="block truncate rounded-sm after:absolute after:inset-0 after:rounded-[inherit] hover:text-accent focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus"
         >
-          {project.name}
+          {#if project.match?.nameSegments}
+            <HighlightedText segments={project.match.nameSegments} />
+          {:else}
+            {project.name}
+          {/if}
         </a>
       </h3>
       <p class="flex min-w-0 items-center gap-2 text-xs text-text-muted">
         <span class="truncate max-sm:hidden">
           {project.originalFilename ?? projectSourceFallback(project)}
         </span>
-        {#if project.subtitleMatch}
-          <Badge tone="accent">Subtitle text match</Badge>
+        {#if project.languages.length > 0}
+          <span
+            class="shrink-0"
+            title={project.languages.map(languageName).join(", ")}
+          >
+            <span aria-hidden="true">
+              {project.languages
+                .map((code) => languageFlag(code) ?? code.toUpperCase())
+                .join(" ")}
+            </span>
+            <span class="sr-only">
+              Transcripts in {project.languages.map(languageName).join(", ")}
+            </span>
+          </span>
         {/if}
       </p>
     {/if}
@@ -252,4 +272,16 @@
       </MenuItem>
     </Menu>
   </div>
+
+  {#if project.match && project.match.hitCount > 0}
+    <div class="col-span-2 col-start-2 pt-1 sm:col-span-4 sm:col-start-2">
+      <ProjectMatches
+        projectId={project.id}
+        projectName={project.name}
+        match={project.match}
+        {query}
+        showLanguages={project.languages.length > 1}
+      />
+    </div>
+  {/if}
 </li>

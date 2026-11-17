@@ -4,9 +4,12 @@ import { afterEach } from "vitest";
 import { db } from "#lib/server/db/index.ts";
 
 afterEach(() => {
+  // Full-text indexes keep their data in shadow tables, which only the index
+  // itself may change.
   const tables = db.all<{ name: string }>(
-    sql`select name from sqlite_master
-         where type = 'table'
+    sql`select name from pragma_table_list
+         where schema = 'main'
+           and type in ('table', 'virtual')
            and name not like 'sqlite_%'
            and name not like '__drizzle%'`,
   );

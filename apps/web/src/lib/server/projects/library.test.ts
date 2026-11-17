@@ -10,28 +10,44 @@ import {
 } from "#lib/shared/limits.ts";
 
 describe("project library inputs", () => {
-  it("parses title search and optional subtitle scope", () => {
-    expect(
-      parseProjectLibrarySearch(new URLSearchParams("q=%20rough+cut%20")),
-    ).toEqual({
-      query: "rough cut",
-      includeSubtitles: false,
-    });
+  it("reads the query and filters, sorting by relevance only while searching", () => {
     expect(
       parseProjectLibrarySearch(
-        new URLSearchParams("q=interview&scope=subtitles"),
+        new URLSearchParams(
+          "q=%20rough+cut%20&language=es&status=active&added=week",
+        ),
       ),
-    ).toEqual({ query: "interview", includeSubtitles: true });
+    ).toEqual({
+      query: "rough cut",
+      language: "es",
+      status: "active",
+      added: "week",
+      sort: "relevance",
+    });
+    expect(parseProjectLibrarySearch(new URLSearchParams()).sort).toBe(
+      "activity",
+    );
+  });
+
+  it("ignores filter values it does not know", () => {
+    expect(
+      parseProjectLibrarySearch(
+        new URLSearchParams("language=<x>&status=done&added=ever&sort=size"),
+      ),
+    ).toEqual({
+      query: "",
+      language: null,
+      status: null,
+      added: null,
+      sort: "activity",
+    });
   });
 
   it("bounds search input without treating punctuation as syntax", () => {
     const query = `${"a".repeat(PROJECT_SEARCH_MAX_LENGTH)}%_`;
     expect(
-      parseProjectLibrarySearch(new URLSearchParams({ q: query })),
-    ).toEqual({
-      query: "a".repeat(PROJECT_SEARCH_MAX_LENGTH),
-      includeSubtitles: false,
-    });
+      parseProjectLibrarySearch(new URLSearchParams({ q: query })).query,
+    ).toBe("a".repeat(PROJECT_SEARCH_MAX_LENGTH));
   });
 
   it("normalizes project titles and enforces their storage limit", () => {

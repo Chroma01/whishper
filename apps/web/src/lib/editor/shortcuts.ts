@@ -1,3 +1,4 @@
+import { isTextEntryTarget } from "#lib/browser/text-entry.ts";
 import type { CueTimeField } from "./cues";
 
 type ShortcutDefinition = {
@@ -28,6 +29,8 @@ export type StudioCommands = {
   openGuide(): void;
   canSave(): boolean;
   save(): void;
+  canFind(): boolean;
+  openFind(replace: boolean): void;
   canUndo(): boolean;
   undo(): void;
   canRedo(): boolean;
@@ -38,8 +41,6 @@ export type StudioCommands = {
   setSelectedTimeToPlayhead(field: CueTimeField): void;
 };
 
-const TEXT_ENTRY_TARGET_SELECTOR =
-  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 // Fields that rewrite their own value keep no native undo history, so undo
 // and redo there act on the cues.
 const NO_NATIVE_UNDO_SELECTOR = "[data-no-native-undo]";
@@ -153,6 +154,18 @@ export const shortcutGroups = [
         id: "save",
         keys: ["Ctrl/Command", "S"],
         description: "Save the current track",
+      },
+      {
+        id: "find",
+        keys: ["Ctrl/Command", "F"],
+        description: "Find in the transcript",
+        ariaKeys: "Control+F Meta+F",
+      },
+      {
+        id: "replace",
+        keys: ["Ctrl", "H"],
+        description: "Find and replace; Command+Option+F on a Mac",
+        ariaKeys: "Control+H Meta+Alt+F",
       },
     ],
   },
@@ -271,9 +284,20 @@ function handleCommandShortcut(
     commands.save();
     return;
   }
+  if (!event.shiftKey && key === "f" && commands.canFind()) {
+    event.preventDefault();
+    commands.openFind(false);
+    return;
+  }
+  // Command+H hides the browser on a Mac, where Command+Option+F replaces.
+  if (event.ctrlKey && !event.shiftKey && key === "h" && commands.canFind()) {
+    event.preventDefault();
+    commands.openFind(true);
+    return;
+  }
   if (
     (key === "z" || key === "y") &&
-    matchesClosest(event.target, TEXT_ENTRY_TARGET_SELECTOR) &&
+    isTextEntryTarget(event.target) &&
     !matchesClosest(event.target, NO_NATIVE_UNDO_SELECTOR)
   ) {
     return;
@@ -358,6 +382,15 @@ export function handleStudioKeydown(
   const key = event.key.toLowerCase();
   if (event.repeat && SINGLE_PRESS_KEYS.has(key)) return;
 
+  // Option changes the character typed on a Mac, so the physical key is read.
+  if (event.metaKey && event.altKey && event.code === "KeyF") {
+    if (commands.canFind()) {
+      event.preventDefault();
+      commands.openFind(true);
+    }
+    return;
+  }
+
   if ((event.ctrlKey || event.metaKey) && !event.altKey) {
     handleCommandShortcut(event, key, commands);
     return;
@@ -367,7 +400,7 @@ export function handleStudioKeydown(
     event.ctrlKey ||
     event.metaKey ||
     event.altKey ||
-    matchesClosest(event.target, TEXT_ENTRY_TARGET_SELECTOR)
+    isTextEntryTarget(event.target)
   ) {
     return;
   }

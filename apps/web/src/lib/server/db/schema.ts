@@ -340,6 +340,9 @@ export const subtitleTracks = sqliteTable(
   ],
 );
 
+// Triggers on this table keep the cue_search full-text index current. A
+// migration that rebuilds the table drops them, so it must create them again
+// as in migrations/0006_cue_search.sql.
 export const cues = sqliteTable(
   "cues",
   {

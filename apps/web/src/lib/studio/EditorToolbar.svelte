@@ -21,7 +21,7 @@
     run: () => void;
   };
 
-  let { editor }: { editor: CueEditor } = $props();
+  let { editor, onfind }: { editor: CueEditor; onfind: () => void } = $props();
 
   const saveState = $derived(editor.autosave.state);
   const editDisabled = $derived(!editor.hasSelection);
@@ -83,6 +83,15 @@
         label: "+100 ms",
         disabled: editDisabled,
         run: () => editor.nudgeSelected(100),
+      },
+    ],
+    [
+      {
+        label: "Find and replace",
+        icon: "search",
+        shortcut: "find",
+        disabled: false,
+        run: onfind,
       },
     ],
   ]);

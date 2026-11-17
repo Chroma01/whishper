@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Icon from "#lib/components/Icon.svelte";
   import type { CueEditor } from "#lib/editor/editor.svelte.ts";
   import {
@@ -9,8 +10,10 @@
   import { languageName } from "#lib/shared/languages.ts";
   import { isRunActive } from "#lib/shared/project-status.ts";
   import type { SubtitleTrackSummary } from "#lib/shared/subtitles.ts";
+  import type { CueFinder } from "#lib/editor/finder.svelte.ts";
   import CueList from "./CueList.svelte";
   import EditorToolbar from "./EditorToolbar.svelte";
+  import FindBar from "./FindBar.svelte";
   import JournalNotice from "./JournalNotice.svelte";
   import ProcessingStatus from "./ProcessingStatus.svelte";
   import TranscribePanel, { processingNote } from "./TranscribePanel.svelte";
@@ -20,6 +23,7 @@
 
   type Props = {
     editor: CueEditor;
+    finder: CueFinder;
     track: StudioData["track"];
     tracks: StudioData["tracks"];
     readyTrack: SubtitleTrackSummary | null;
@@ -42,6 +46,7 @@
 
   let {
     editor,
+    finder,
     track,
     tracks,
     readyTrack,
@@ -90,6 +95,18 @@
   const firstPreparation = $derived(
     mediaPreparationStatus === "completed" ? null : (preparations[0] ?? null),
   );
+
+  let findBar = $state<FindBar>();
+
+  export async function openFind(replace: boolean): Promise<void> {
+    const returnTo =
+      !finder.open && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    finder.show();
+    await tick();
+    await findBar?.focus(replace, returnTo);
+  }
 </script>
 
 <section
@@ -141,9 +158,12 @@
   <TranscriptNotices {readyTrack} onopenready={onopentrack} {ondismissready} />
 
   {#if track}
-    <EditorToolbar {editor} />
+    <EditorToolbar {editor} onfind={() => void openFind(false)} />
+    {#if finder.open}
+      <FindBar bind:this={findBar} {finder} />
+    {/if}
     <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
-      <CueList {editor} />
+      <CueList {editor} {finder} />
     </div>
   {:else if !isRunActive(run) && hasSourceMedia}
     <TranscribePanel

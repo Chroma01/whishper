@@ -77,7 +77,8 @@ The SvelteKit application is a modular monolith. It owns:
 - Model availability.
 - Internal worker APIs.
 - Subtitle export and download authorization.
-- Planned: search, collections, tags, trash, audit events, provider configuration, and a public automation API.
+- Search over project names and transcripts.
+- Planned: collections, tags, trash, audit events, provider configuration, and a public automation API.
 
 Modules share one process and database but expose narrow domain functions. Route handlers do not contain business rules.
 
@@ -290,9 +291,9 @@ Media metadata records detected frame rates and variable-frame-rate behavior. Th
 
 ## Search and organization
 
-Built: the library does a case-insensitive substring match over project names and, when the subtitle scope is chosen, over cue text. Case folding is Unicode-aware, through a function the application registers with SQLite. Planned: workspace-scoped search over projects, cues, speakers, languages, and tags, using SQLite's FTS5 full-text index with its trigram tokenizer as the multilingual fallback.
+Built: the library searches project names and cue text together. Cue text has an FTS5 full-text index, one row per cue, kept in step by triggers on the cues table and created in a custom migration, since Drizzle cannot describe FTS5 tables. Its `unicode61` tokenizer folds case and accents. Queries in scripts written without spaces, such as Chinese and Japanese, fall back to a substring match through a case-folding function the application registers with SQLite. Each hit carries its cue's start time, so a result opens the studio at that cue. Filters cover language, status, and date added. The studio's find and replace runs in the browser over the open transcript.
 
-Results include context and media timestamps. Filters cover project, owner, date, language, speaker, track type, tag, and run state.
+Planned: speakers, tags, and owner filters.
 
 Projects use flat collections and tags. V1 does not implement nested folders or mirror UI organization onto storage paths.
 

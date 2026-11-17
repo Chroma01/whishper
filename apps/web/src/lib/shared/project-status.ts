@@ -1,3 +1,4 @@
+import type { LibraryStatus } from "./library-data";
 import { isAudioMedia } from "./media";
 
 export const PROBE_STATES = [
@@ -113,6 +114,20 @@ export function displayState(project: ProjectStatusFields): DisplayState {
   return project.uploadStatus === "completed"
     ? "ready"
     : (project.uploadStatus ?? "draft");
+}
+
+const NEEDS_ATTENTION: readonly DisplayState[] = [
+  "failed",
+  "cancelled",
+  "paused",
+  "draft",
+];
+
+export function libraryStatus(project: ProjectStatusFields): LibraryStatus {
+  if (isProjectActive(project)) return "active";
+  const state = displayState(project);
+  if (NEEDS_ATTENTION.includes(state)) return "attention";
+  return isOneOf(ACTIVE_RUN_STATUSES, state) ? "active" : "ready";
 }
 
 type UploadFields = Pick<

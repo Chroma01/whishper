@@ -13,11 +13,39 @@
     type EditorCue,
   } from "#lib/editor/cues.ts";
   import type { CueEditor } from "#lib/editor/editor.svelte.ts";
+  import type { FindMatch } from "#lib/editor/find.ts";
+  import type { CueFinder } from "#lib/editor/finder.svelte.ts";
   import { shortcutAriaKeys, shortcutLabel } from "#lib/editor/shortcuts.ts";
   import { CUE_TIME_ERROR_ID } from "./cue-status";
   import { revealOffset } from "./reveal";
 
-  let { editor }: { editor: CueEditor } = $props();
+  let { editor, finder }: { editor: CueEditor; finder: CueFinder } = $props();
+
+  let matchesByCue = $derived.by(() => {
+    const byCue = new Map<string, FindMatch[]>();
+    for (const match of finder.matches) {
+      byCue.set(match.cueId, [...(byCue.get(match.cueId) ?? []), match]);
+    }
+    return byCue;
+  });
+
+  type MarkedPart = { text: string; match: FindMatch | null };
+
+  // The text split around its matches, to draw behind the transparent field.
+  function markedParts(text: string, matches: FindMatch[]): MarkedPart[] {
+    const parts: MarkedPart[] = [];
+    let cursor = 0;
+    for (const match of matches) {
+      if (match.start > cursor) {
+        parts.push({ text: text.slice(cursor, match.start), match: null });
+      }
+      parts.push({ text: text.slice(match.start, match.end), match });
+      cursor = match.end;
+    }
+    // A field keeps the height of a final empty line; the extra space does too.
+    parts.push({ text: `${text.slice(cursor)} `, match: null });
+    return parts;
+  }
 
   const uid = $props.id();
   const FOCUS_RING =
@@ -98,11 +126,19 @@
     else editor.clearTimeError(cueId, field);
   }
 
-  function fieldClasses(selected: boolean, invalid = false): string {
+  function fieldBackground(selected: boolean): string {
+    return `focus:bg-surface ${selected ? "bg-surface" : "bg-transparent"}`;
+  }
+
+  function fieldClasses(
+    selected: boolean,
+    invalid = false,
+    background = fieldBackground(selected),
+  ): string {
     const border = invalid
       ? "border-danger"
       : `hover:border-border-strong focus:border-accent ${selected ? "border-border-strong" : "border-transparent"}`;
-    return `rounded border text-text focus:bg-surface ${FOCUS_RING} ${border} ${selected ? "bg-surface" : "bg-transparent"}`;
+    return `rounded border text-text ${FOCUS_RING} ${border} ${background}`;
   }
 
   function rememberCursor(cueId: string, event: Event): void {
@@ -185,6 +221,7 @@
       {@const selected = editor.selectedCueId === cue.id}
       {@const active = activeCueId === cue.id}
       {@const issuesId = `${uid}-issues-${cue.id}`}
+      {@const cueMatches = matchesByCue.get(cue.id)}
       <li
         {@attach registerRow(cue.id)}
         class={[
@@ -195,6 +232,7 @@
               ? "border-l-accent/40"
               : "border-l-transparent hover:bg-surface-sunken",
         ]}
+        data-selected-cue={selected || undefined}
         onfocusin={() => (editor.selectedCueId = cue.id)}
       >
         <button
@@ -223,22 +261,46 @@
               >{((cue.end_us - cue.start_us) / 1_000_000).toFixed(2)}s</span
             >
           </div>
-          <textarea
-            class="w-full resize-none px-1 py-1 text-sm leading-snug field-sizing-content {fieldClasses(
-              selected,
-            )}"
-            aria-label={`Cue ${index + 1} text`}
-            aria-describedby={issues.length ? issuesId : undefined}
-            rows="2"
-            value={cue.text}
-            onfocus={() => editor.beginEdit(cue.id)}
-            oninput={(event) =>
-              editor.setText(index, event.currentTarget.value)}
-            onselect={(event) => rememberCursor(cue.id, event)}
-            onclick={(event) => rememberCursor(cue.id, event)}
-            onkeyup={(event) => rememberCursor(cue.id, event)}
-            onblur={() => editor.finishEdit()}
-            spellcheck="true"></textarea>
+          <!-- The matches are drawn behind the field, which turns transparent:
+               a textarea cannot mark parts of its own text. Both share the
+               same box and text settings so their lines wrap alike. -->
+          <div
+            class="grid rounded {cueMatches ? fieldBackground(selected) : ''}"
+          >
+            {#if cueMatches}
+              <div
+                class="pointer-events-none col-start-1 row-start-1 rounded border border-transparent px-1 py-1 text-sm leading-snug wrap-break-word whitespace-pre-wrap text-transparent"
+                aria-hidden="true"
+              >
+                {#each markedParts(cue.text, cueMatches) as part, partIndex (partIndex)}{#if part.match}<mark
+                      class={[
+                        "rounded-[2px] text-transparent",
+                        part.match === finder.current
+                          ? "bg-highlight outline-2 outline-accent"
+                          : "bg-highlight",
+                      ]}>{part.text}</mark
+                    >{:else}{part.text}{/if}{/each}
+              </div>
+            {/if}
+            <textarea
+              class="col-start-1 row-start-1 w-full resize-none px-1 py-1 text-sm leading-snug field-sizing-content {fieldClasses(
+                selected,
+                false,
+                cueMatches ? 'bg-transparent' : undefined,
+              )}"
+              aria-label={`Cue ${index + 1} text`}
+              aria-describedby={issues.length ? issuesId : undefined}
+              rows="2"
+              value={cue.text}
+              onfocus={() => editor.beginEdit(cue.id)}
+              oninput={(event) =>
+                editor.setText(index, event.currentTarget.value)}
+              onselect={(event) => rememberCursor(cue.id, event)}
+              onclick={(event) => rememberCursor(cue.id, event)}
+              onkeyup={(event) => rememberCursor(cue.id, event)}
+              onblur={() => editor.finishEdit()}
+              spellcheck="true"></textarea>
+          </div>
           {#if issues.length}
             <ul
               id={issuesId}

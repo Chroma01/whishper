@@ -225,6 +225,17 @@ export class CueEditor {
     this.autosave.markChanged();
   }
 
+  // One undo step, however many cues change.
+  replaceTexts(texts: ReadonlyMap<string, string>): void {
+    if (texts.size === 0) return;
+    this.#apply({
+      cues: this.cues.map((cue) => {
+        const text = texts.get(cue.id);
+        return text === undefined ? cue : { ...cue, text };
+      }),
+    });
+  }
+
   splitSelected(): void {
     const index = this.selectedCueIndex;
     if (index < 0) return;

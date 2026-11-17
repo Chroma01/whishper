@@ -2,11 +2,19 @@
   import type { HTMLInputAttributes } from "svelte/elements";
   import { CONTROL_CLASSES } from "./variants";
 
+  type Props = HTMLInputAttributes & { ref?: HTMLInputElement };
+
   let {
     value = $bindable(),
+    ref = $bindable(),
     class: extra = "",
     ...rest
-  }: HTMLInputAttributes = $props();
+  }: Props = $props();
 </script>
 
-<input bind:value {...rest} class="{CONTROL_CLASSES} h-9 {extra}" />
+<input
+  bind:this={ref}
+  bind:value
+  {...rest}
+  class="{CONTROL_CLASSES} h-9 {extra}"
+/>

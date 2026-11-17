@@ -168,6 +168,36 @@ async function checkMediaDialog(page, theme) {
   return failures;
 }
 
+async function checkFindBar(page, theme) {
+  const cue = page.getByRole("textbox", { name: /^Cue \d+ text$/ }).first();
+  const word = (await cue.inputValue())
+    .split(/[^\p{L}]+/u)
+    .find((part) => part.length >= 3);
+  if (!word) return 0;
+  await cue.focus();
+  await page.keyboard.press("Control+f");
+  const bar = page.getByRole("search", { name: "Find in transcript" });
+  const find = bar.getByRole("textbox", { name: "Find", exact: true });
+  if (!(await isFocused(find))) throw new Error("Ctrl+F did not focus find");
+  await page.keyboard.type(word);
+  await bar.getByText(/^\d+ of \d+$/).waitFor();
+  await page.keyboard.press("Control+h");
+  await bar.getByRole("textbox", { name: "Replace with" }).waitFor();
+  await page.screenshot({ path: `${outputDir}/studio-find-${theme}-1440.png` });
+  const failures = reportViolations(
+    await axeViolations(page, '[role="search"]'),
+    { name: "studio-find" },
+    theme,
+    1440,
+  );
+  await page.keyboard.press("Escape");
+  await bar.waitFor({ state: "hidden" });
+  if (!(await isFocused(cue))) {
+    throw new Error("closing find did not return focus to the cue");
+  }
+  return failures;
+}
+
 export async function checkStudioKeyboard(context, theme) {
   const page = await context.newPage();
   const label = `studio keyboard ${theme}`;
@@ -184,8 +214,9 @@ export async function checkStudioKeyboard(context, theme) {
     await checkExportMenu(page);
     await checkSpeedMenu(page);
     failures += await checkMediaDialog(page, theme);
+    failures += await checkFindBar(page, theme);
     console.log(
-      `${label}: separator, new transcript dialog, pickers, transcript menu, export menu, speed menu and media dialog ok`,
+      `${label}: separator, new transcript dialog, pickers, transcript menu, export menu, speed menu, media dialog and find bar ok`,
     );
     return failures;
   } catch (error) {

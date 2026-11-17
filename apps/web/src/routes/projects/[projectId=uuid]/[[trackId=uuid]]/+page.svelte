@@ -9,7 +9,9 @@
   } from "$app/navigation";
   import { pollWhileActive } from "#lib/browser/polling.svelte.ts";
   import { discardDeletedTrackJournals } from "#lib/editor/autosave.svelte.ts";
+  import { page } from "$app/state";
   import { CueEditor } from "#lib/editor/editor.svelte.ts";
+  import { CueFinder } from "#lib/editor/finder.svelte.ts";
   import { PaneWidth } from "#lib/editor/pane-width.svelte.ts";
   import {
     handleStudioKeydown,
@@ -194,6 +196,8 @@
         ),
     },
   });
+  const finder = new CueFinder(editor);
+  let transcriptPanel = $state<TranscriptPanel>();
   const commands: StudioCommands = {
     transport: editor.transport,
     isDialogOpen: () =>
@@ -201,6 +205,8 @@
     openGuide: () => (shortcutGuideOpen = true),
     canSave: () => data.track !== null,
     save: () => void editor.autosave.flush(),
+    canFind: () => data.track !== null,
+    openFind: (replace) => void transcriptPanel?.openFind(replace),
     canUndo: () => editor.canUndo,
     undo: () => editor.undo(),
     canRedo: () => editor.canRedo,
@@ -247,6 +253,30 @@
         Number(track?.revision ?? 0),
       ),
     );
+  });
+
+  // A search result opens the studio on one cue, with the find bar showing
+  // what matched there. It applies once the cue and the player both exist.
+  let openedLink: string | null = null;
+  $effect(() => {
+    const cueId = page.url.searchParams.get("cue");
+    const query = page.url.searchParams.get("q");
+    const trackId = data.track?.id;
+    const media = editor.transport.mediaElement;
+    const link = `${trackId} ${cueId} ${query}`;
+    if (!cueId || !trackId || openedLink === link) return;
+    untrack(() => {
+      const cue = editor.cues.find((candidate) => candidate.id === cueId);
+      if (!cue) return;
+      if (data.project.hasSourceMedia && !media) return;
+      openedLink = link;
+      if (query) {
+        finder.show(query);
+        finder.startAtCue(cue.id);
+      }
+      editor.select(cue.id);
+      editor.transport.seekTo(cue.start_us);
+    });
   });
 
   $effect(() => {
@@ -357,7 +387,9 @@
     </div>
 
     <TranscriptPanel
+      bind:this={transcriptPanel}
       {editor}
+      {finder}
       track={data.track}
       tracks={data.tracks}
       {readyTrack}

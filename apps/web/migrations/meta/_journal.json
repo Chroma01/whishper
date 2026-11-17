@@ -43,6 +43,13 @@
       "when": 1794891665869,
       "tag": "0005_derivative_audio_track",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794915477585,
+      "tag": "0006_cue_search",
+      "breakpoints": true
     }
   ]
 }

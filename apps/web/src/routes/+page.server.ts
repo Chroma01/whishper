@@ -9,6 +9,7 @@ import {
   primaryWorkspaceForUser,
   renameProjectForUser,
 } from "#lib/server/projects/library.ts";
+import { workspaceLanguages } from "#lib/server/projects/library-search.ts";
 import { readInstanceSettings } from "#lib/server/settings/instance.ts";
 import type { LibraryData } from "#lib/shared/library-data.ts";
 import { isUuid } from "#lib/shared/uuid.ts";
@@ -24,13 +25,14 @@ export const load: PageServerLoad = async ({
   const search = parseProjectLibrarySearch(url.searchParams);
 
   const workspace = primaryWorkspaceForUser(db, user.id);
-  const projects = workspace
+  const results = workspace
     ? listLibraryProjects(db, workspace.id, search)
-    : [];
+    : { projects: [], unfilteredCount: 0, needsTerm: false };
   return {
+    ...results,
     workspace,
-    projects,
     search,
+    languages: workspace ? workspaceLanguages(db, workspace.id) : [],
     maxUploadBytes: readInstanceSettings(db).maxUploadBytes,
   };
 };

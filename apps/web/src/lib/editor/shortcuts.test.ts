@@ -34,6 +34,8 @@ function commands(): StudioCommands {
     openGuide: vi.fn(),
     canSave: () => true,
     save: vi.fn(),
+    canFind: () => true,
+    openFind: vi.fn(),
     canUndo: () => true,
     undo: vi.fn(),
     canRedo: () => true,
@@ -49,15 +51,19 @@ function keydown(
   key: string,
   options: {
     ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
     shiftKey?: boolean;
+    code?: string;
     target?: string | string[];
   } = {},
 ) {
   return {
     key,
+    code: options.code ?? "",
     ctrlKey: options.ctrlKey ?? false,
-    metaKey: false,
-    altKey: false,
+    metaKey: options.metaKey ?? false,
+    altKey: options.altKey ?? false,
     shiftKey: options.shiftKey ?? false,
     repeat: false,
     defaultPrevented: false,
@@ -124,6 +130,30 @@ describe("handleStudioKeydown", () => {
     press(event, studio);
     expect(studio.save).toHaveBeenCalledOnce();
     expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("opens find with Ctrl+F and replace with Ctrl+H, even while typing", () => {
+    const studio = commands();
+    press(keydown("f", { ctrlKey: true, target: "textarea" }), studio);
+    press(keydown("h", { ctrlKey: true }), studio);
+    expect(studio.openFind).toHaveBeenNthCalledWith(1, false);
+    expect(studio.openFind).toHaveBeenNthCalledWith(2, true);
+  });
+
+  it("opens replace with Command+Option+F, whatever character Option types", () => {
+    const studio = commands();
+    const event = keydown("ƒ", { metaKey: true, altKey: true, code: "KeyF" });
+    press(event, studio);
+    expect(studio.openFind).toHaveBeenCalledWith(true);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("leaves Command+H to the system", () => {
+    const studio = commands();
+    const event = keydown("h", { metaKey: true });
+    press(event, studio);
+    expect(studio.openFind).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
   it("runs cue undo, redo and split outside text fields", () => {
