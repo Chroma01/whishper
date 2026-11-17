@@ -56,7 +56,7 @@ You need Linux on x86-64 with Docker and Docker Compose.
 
 4. Open `http://localhost:5173` and create your account. It asks for a setup code, which `docker compose logs web` shows.
 
-A GPU transcribes several times faster than a CPU. AMD and Intel GPUs aren't supported yet, but we plan to add them.
+A GPU transcribes several times faster than a CPU. AMD and Intel GPUs aren't supported yet, but I plan to add them.
 
 [Install](docs/INSTALL.md) covers Podman, reverse proxies and building from source. [NVIDIA GPUs](docs/GPU.md) helps when the GPU doesn't work.
 
