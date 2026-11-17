@@ -10,7 +10,7 @@ This release lets you pick the audio track to transcribe in files with several, 
 
 - A prompt under **Advanced options** when you transcribe: names and terms the model should spell the way you write them. It works with local models and with providers, and the API takes it as `prompt`.
 - LRC export, for synced lyrics in music players.
-- An **Audio track** choice when you transcribe a file with more than one, such as a film with a dub. Each transcript plays the track it came from, and an audio menu under the video plays another one for a moment. The API takes it as `audioTrack`.
+- An **Audio track** choice when you transcribe a file with more than one, such as a film with a dub. Each transcript plays the track it came from, and the audio menu under the video can play another track while you edit. The API takes it as `audioTrack`.
 - Several transcripts per project. **New transcript** replaces **Re-transcribe** and keeps the transcript you had, and a menu above the subtitle list switches between them. You can keep editing while a new one runs. The API lists each transcript's `audioTrack`.
 - Playback speed, volume and full screen in the bar under the video, which replaces the browser's own player controls.
 - **Media details**, from the studio's title bar, shows the file's tracks and the space each prepared audio track takes, and can rebuild or remove one.
