@@ -20,6 +20,10 @@
   import TranscriptNotices from "./TranscriptNotices.svelte";
   import TranscriptSwitcher from "./TranscriptSwitcher.svelte";
   import type { StudioData } from "#lib/shared/studio-data.ts";
+  import {
+    translationOrigin,
+    type TranslationTask,
+  } from "#lib/shared/translation.ts";
 
   type Props = {
     editor: CueEditor;
@@ -28,6 +32,7 @@
     tracks: StudioData["tracks"];
     readyTrack: SubtitleTrackSummary | null;
     run: StudioData["run"];
+    translations: TranslationTask[];
     preparations: StudioData["preparations"];
     mediaPreparationStatus: StudioData["project"]["mediaPreparationStatus"];
     hasSourceMedia: boolean;
@@ -39,6 +44,9 @@
     // The track a new transcript starts on: the one playing.
     audioTrack: number;
     oncreate: (() => void) | null;
+    // Opens the translate dialog on a transcript, with languages chosen. Null
+    // when no original transcript is left to translate from.
+    ontranslate: ((sourceId: string, languages: string[]) => void) | null;
     canDelete: boolean;
     onopentrack: (trackId: string) => void;
     ondismissready: () => void;
@@ -51,6 +59,7 @@
     tracks,
     readyTrack,
     run,
+    translations,
     preparations,
     mediaPreparationStatus,
     hasSourceMedia,
@@ -61,6 +70,7 @@
     audioTracks,
     audioTrack,
     oncreate,
+    ontranslate,
     canDelete,
     onopentrack,
     ondismissready,
@@ -78,20 +88,40 @@
       ? `New ${languageName(run.language)} transcript`
       : "New transcript",
   );
-  const pending = $derived(
-    run && isRunActive(run)
-      ? {
-          label: runLabel,
-          status: [
-            audioTracks.length > 1 ? `Track ${run.audioTrack + 1}` : null,
-            run.progressMessage ?? "Waiting for a worker",
-            run.progress === null ? null : `${Math.round(run.progress * 100)}%`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        }
-      : null,
+  const activeTranslations = $derived(
+    translations.filter((task) => task.state !== "failed"),
   );
+  const failedTranslations = $derived(
+    translations.filter((task) => task.state === "failed"),
+  );
+  const pending = $derived([
+    ...(run && isRunActive(run)
+      ? [
+          {
+            key: run.id,
+            label: runLabel,
+            status: [
+              audioTracks.length > 1 ? `Track ${run.audioTrack + 1}` : null,
+              run.progressMessage ?? "Waiting for a worker",
+              run.progress === null
+                ? null
+                : `${Math.round(run.progress * 100)}%`,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          },
+        ]
+      : []),
+    ...activeTranslations.map((task) => ({
+      key: task.jobId,
+      label: `${languageName(task.targetLanguage)} translation`,
+      status: [
+        task.progressMessage ?? "Waiting for a worker",
+        `${Math.round(task.progress * 100)}%`,
+      ].join(" · "),
+    })),
+  ]);
+  const origin = $derived(track ? translationOrigin(track.metadata) : null);
   const firstPreparation = $derived(
     mediaPreparationStatus === "completed" ? null : (preparations[0] ?? null),
   );
@@ -126,6 +156,7 @@
           showAudioTrack={audioTracks.length > 1}
           {pending}
           {oncreate}
+          ontranslate={ontranslate ? () => ontranslate?.(track.id, []) : null}
           {canDelete}
           onopen={onopentrack}
         />
@@ -154,8 +185,18 @@
     {runLabel}
     preparation={firstPreparation}
     {mediaPreparationStatus}
+    translations={activeTranslations}
   />
-  <TranscriptNotices {readyTrack} onopenready={onopentrack} {ondismissready} />
+  <TranscriptNotices
+    {readyTrack}
+    {failedTranslations}
+    openTrackId={track?.id ?? null}
+    {tracks}
+    {origin}
+    {onopentrack}
+    {ondismissready}
+    {ontranslate}
+  />
 
   {#if track}
     <EditorToolbar {editor} onfind={() => void openFind(false)} />

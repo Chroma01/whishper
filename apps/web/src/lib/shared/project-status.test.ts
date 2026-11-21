@@ -88,10 +88,18 @@ describe("isPreparationActive", () => {
 describe("isStudioActive", () => {
   it("detects a queued or running transcription run", () => {
     expect(
-      isStudioActive({ run: { status: "running" }, preparations: [] }),
+      isStudioActive({
+        run: { status: "running" },
+        preparations: [],
+        translations: [],
+      }),
     ).toBe(true);
     expect(
-      isStudioActive({ run: { status: "completed" }, preparations: [] }),
+      isStudioActive({
+        run: { status: "completed" },
+        preparations: [],
+        translations: [],
+      }),
     ).toBe(false);
   });
 
@@ -100,15 +108,32 @@ describe("isStudioActive", () => {
       isStudioActive({
         run: null,
         preparations: [{ state: "completed" }, { state: "leased" }],
+        translations: [],
       }),
     ).toBe(true);
     expect(
-      isStudioActive({ run: null, preparations: [{ state: "succeeded" }] }),
+      isStudioActive({
+        run: null,
+        preparations: [{ state: "succeeded" }],
+        translations: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("detects a running translation but not a failed one", () => {
+    const idle = { run: null, preparations: [] };
+    expect(
+      isStudioActive({ ...idle, translations: [{ state: "queued" }] }),
+    ).toBe(true);
+    expect(
+      isStudioActive({ ...idle, translations: [{ state: "failed" }] }),
     ).toBe(false);
   });
 
   it("is false with nothing in flight", () => {
-    expect(isStudioActive({ run: null, preparations: [] })).toBe(false);
+    expect(
+      isStudioActive({ run: null, preparations: [], translations: [] }),
+    ).toBe(false);
   });
 });
 

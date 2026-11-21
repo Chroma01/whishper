@@ -1,10 +1,3 @@
-<script module lang="ts">
-  const createdDateTime = new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-</script>
-
 <script lang="ts">
   import Flag from "#lib/components/Flag.svelte";
   import Icon from "#lib/components/Icon.svelte";
@@ -13,16 +6,18 @@
   import MenuItem from "#lib/components/ui/MenuItem.svelte";
   import { languageFlag, languageName } from "#lib/shared/languages.ts";
   import type { SubtitleTrackSummary } from "#lib/shared/subtitles.ts";
+  import TranscriptLabel from "./TranscriptLabel.svelte";
 
   type Props = {
     tracks: SubtitleTrackSummary[];
     openTrackId: string;
-    // Only a file with several audio tracks names the one each transcript used.
     showAudioTrack: boolean;
-    // A transcript still being made, listed after the finished ones.
-    pending: { label: string; status: string } | null;
+    // Transcripts and translations still being made, listed after the
+    // finished ones.
+    pending: { key: string; label: string; status: string }[];
     // Null while a new transcript cannot be started.
     oncreate: (() => void) | null;
+    ontranslate: (() => void) | null;
     canDelete: boolean;
     onopen: (trackId: string) => void;
   };
@@ -33,6 +28,7 @@
     showAudioTrack,
     pending,
     oncreate,
+    ontranslate,
     canDelete,
     onopen,
   }: Props = $props();
@@ -42,17 +38,6 @@
   const openName = $derived(
     openTrack ? languageName(openTrack.language) : "Transcript",
   );
-
-  function details(track: SubtitleTrackSummary): string {
-    return [
-      showAudioTrack && track.audioTrack !== null
-        ? `Track ${track.audioTrack + 1}`
-        : null,
-      track.name,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
 </script>
 
 <Menu label="Transcripts">
@@ -71,7 +56,7 @@
       <span class="flex min-w-0 items-center gap-1">
         <span class="truncate">{openName}</span>
         <span class="sr-only">transcript</span>
-        {#if pending}
+        {#if pending.length > 0}
           <span
             class="size-1.5 shrink-0 rounded-full bg-accent"
             aria-hidden="true"
@@ -90,24 +75,12 @@
       checked={track.id === openTrackId}
       onselect={() => onopen(track.id)}
     >
-      <Flag flag={languageFlag(track.language)} placeholder={track.language} />
-      <span
-        class="grid max-w-72 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3"
-      >
-        <span class="truncate font-medium">{languageName(track.language)}</span>
-        <time
-          class="text-xs text-text-muted"
-          datetime={track.createdAt.toISOString()}
-        >
-          {createdDateTime.format(track.createdAt)}
-        </time>
-        <span class="col-span-2 truncate text-xs text-text-muted">
-          {details(track)}
-        </span>
+      <span class="flex max-w-80 min-w-0 flex-1">
+        <TranscriptLabel {track} {showAudioTrack} />
       </span>
     </MenuItem>
   {/each}
-  {#if pending}
+  {#each pending as item (item.key)}
     <div
       class="flex items-center gap-2 px-2.5 py-1.5 text-sm text-text-muted"
       role="none"
@@ -119,12 +92,12 @@
         ></span>
       </span>
       <span class="grid max-w-72 min-w-0 flex-1">
-        <span class="truncate font-medium text-text">{pending.label}</span>
-        <span class="truncate text-xs">{pending.status}</span>
+        <span class="truncate font-medium text-text">{item.label}</span>
+        <span class="truncate text-xs">{item.status}</span>
       </span>
     </div>
-  {/if}
-  {#if oncreate || (canDelete && openTrack)}
+  {/each}
+  {#if oncreate || ontranslate || (canDelete && openTrack)}
     <div role="separator" class="-mx-1 my-1 border-t border-border"></div>
   {/if}
   {#if oncreate}
@@ -137,6 +110,18 @@
         <Icon name="plus" size={16} />
       </span>
       New transcript…
+    </MenuItem>
+  {/if}
+  {#if ontranslate}
+    <MenuItem onselect={ontranslate}>
+      <span class="size-4 shrink-0" aria-hidden="true"></span>
+      <span
+        class="grid h-4.5 w-6 shrink-0 place-items-center text-text-muted"
+        aria-hidden="true"
+      >
+        <Icon name="languages" size={16} />
+      </span>
+      Translate…
     </MenuItem>
   {/if}
   {#if canDelete && openTrack}

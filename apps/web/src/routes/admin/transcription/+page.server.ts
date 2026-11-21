@@ -3,6 +3,8 @@ import { fail } from "@sveltejs/kit";
 
 import { requireAdminOrLogin } from "#lib/server/auth/session.ts";
 import { db } from "#lib/server/db/index.ts";
+import { modelInventoriesFor } from "#lib/server/models/inventory.ts";
+import { modelTaskActions } from "#lib/server/models/task-actions.ts";
 import {
   parseTranscriptionDefaults,
   readTranscriptionDefaults,
@@ -24,10 +26,12 @@ export const load: PageServerLoad = ({ locals }) => {
     defaults,
     models: transcriptionModelChoices(db, manifests, defaults.precision),
     devices: [...devices],
+    workers: modelInventoriesFor(db, "transcription"),
   };
 };
 
 export const actions: Actions = {
+  ...modelTaskActions,
   save: async ({ locals, request }) => {
     requireAdminOrLogin(locals);
     const parsed = parseTranscriptionDefaults(await request.formData());

@@ -54,6 +54,7 @@ describe("studio queries", () => {
     expect(studioStatus(db, project.projectId)).toEqual({
       run: null,
       preparations: [],
+      translations: [],
     });
   });
 

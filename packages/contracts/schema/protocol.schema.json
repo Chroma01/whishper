@@ -4,7 +4,8 @@
     "AdapterCapability": {
       "enum": [
         "transcribe",
-        "align"
+        "align",
+        "translate"
       ],
       "title": "AdapterCapability",
       "type": "string"
@@ -232,6 +233,9 @@
         },
         {
           "$ref": "#/$defs/ModelCacheJobCompletion"
+        },
+        {
+          "$ref": "#/$defs/TranslationJobCompletion"
         }
       ]
     },
@@ -279,7 +283,8 @@
         "adapter_error",
         "adapter_unavailable",
         "media_preparation_error",
-        "model_cache_error"
+        "model_cache_error",
+        "translation_error"
       ],
       "type": "string"
     },
@@ -922,6 +927,30 @@
       "const": "1.0",
       "type": "string"
     },
+    "SourceCue": {
+      "properties": {
+        "startUs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endUs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "startUs",
+        "endUs",
+        "text"
+      ],
+      "title": "SourceCue",
+      "type": "object"
+    },
     "TranscriptArtifact": {
       "additionalProperties": false,
       "properties": {
@@ -1084,6 +1113,150 @@
       "title": "TranscriptionJobPayload",
       "type": "object"
     },
+    "TranslatedCue": {
+      "additionalProperties": false,
+      "properties": {
+        "startUs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endUs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "startUs",
+        "endUs",
+        "text"
+      ],
+      "title": "TranslatedCue",
+      "type": "object"
+    },
+    "TranslationJobCompletion": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "translate",
+          "default": "translate",
+          "type": "string"
+        },
+        "language": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "cues": {
+          "items": {
+            "$ref": "#/$defs/TranslatedCue"
+          },
+          "type": "array"
+        },
+        "adapter": {
+          "$ref": "#/$defs/AdapterReference"
+        }
+      },
+      "required": [
+        "kind",
+        "language",
+        "cues",
+        "adapter"
+      ],
+      "title": "TranslationJobCompletion",
+      "type": "object"
+    },
+    "TranslationJobPayload": {
+      "properties": {
+        "kind": {
+          "const": "translate",
+          "type": "string"
+        },
+        "adapterId": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "providerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "modelName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "sourceTrackId": {
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceLanguage": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "targetLanguage": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sourceLanguageName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "targetLanguageName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxLineLength": {
+          "maximum": 120,
+          "minimum": 20,
+          "type": "integer"
+        },
+        "cues": {
+          "items": {
+            "$ref": "#/$defs/SourceCue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "adapterId",
+        "modelId",
+        "modelName",
+        "projectId",
+        "sourceTrackId",
+        "sourceRevision",
+        "sourceLanguage",
+        "targetLanguage",
+        "sourceLanguageName",
+        "targetLanguageName",
+        "maxLineLength",
+        "cues"
+      ],
+      "title": "TranslationJobPayload",
+      "type": "object"
+    },
+    "TranslationVersion": {
+      "const": "1.0",
+      "type": "string"
+    },
     "WordToken": {
       "additionalProperties": false,
       "properties": {
@@ -1174,12 +1347,24 @@
             }
           ],
           "default": null
+        },
+        "translation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TranslationVersion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
         "mediaPreparation",
         "modelCache",
-        "remoteTranscription"
+        "remoteTranscription",
+        "translation"
       ],
       "title": "WorkerCapabilities",
       "type": "object"
@@ -1285,6 +1470,9 @@
         },
         {
           "$ref": "#/$defs/ModelCacheJobPayload"
+        },
+        {
+          "$ref": "#/$defs/TranslationJobPayload"
         }
       ]
     },

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
@@ -130,36 +131,18 @@ class SpeechApi:
     # A transcript of one part is a few megabytes at most. A larger answer is
     # not one, and reading it whole would only use up the worker's memory.
     async def _send_limited(self, request: httpx.Request) -> httpx.Response:
-        response = await self.client.send(request, stream=True)
-        body = bytearray()
-        try:
-            async for chunk in response.aiter_bytes():
-                body += chunk
-                if len(body) > MAX_RESPONSE_BYTES:
-                    raise RemoteTranscriptionError(
-                        f"{self.access.provider_name} answered with more than "
-                        f"{MAX_RESPONSE_BYTES // (1024 * 1024)} MB, which is not a transcript."
-                    )
-        finally:
-            await response.aclose()
-        # The body is already decoded, so the copy must not decode it again.
-        headers = [
-            (name, value)
-            for name, value in response.headers.raw
-            if name.lower() not in (b"content-encoding", b"content-length")
-        ]
-        return httpx.Response(
-            response.status_code, headers=headers, content=bytes(body), request=request
+        return await send_limited(
+            self.client,
+            request,
+            MAX_RESPONSE_BYTES,
+            lambda: RemoteTranscriptionError(
+                f"{self.access.provider_name} answered with more than "
+                f"{MAX_RESPONSE_BYTES // (1024 * 1024)} MB, which is not a transcript."
+            ),
         )
 
     async def _wait(self, failures: int, response: httpx.Response | None, reason: str) -> None:
-        requested = _retry_after_seconds(response)
-        delay = RETRY_BACKOFF.delay_seconds(failures) if requested is None else requested
-        delay = min(delay, RETRY_BACKOFF.cap_seconds)
-        LOGGER.warning(
-            "%s request failed (%s), retrying in %.1fs", self.access.provider_name, reason, delay
-        )
-        await self.sleep(delay)
+        await wait_before_retry(self.access, self.sleep, failures, response, reason)
 
     def _parse(self, response: httpx.Response) -> VerboseTranscript:
         try:
@@ -212,12 +195,56 @@ class SpeechApi:
             f"{provider} refused the request with HTTP {status}{suffix}."
         )
 
-    # Some servers echo the key in their errors, and the message reaches users.
     def _detail(self, response: httpx.Response) -> str:
-        detail = response_detail(response)
-        if self.access.api_key:
-            detail = detail.replace(self.access.api_key.get_secret_value(), "[API key]")
-        return detail
+        return redacted_detail(self.access, response)
+
+
+async def send_limited(
+    client: httpx.AsyncClient,
+    request: httpx.Request,
+    max_bytes: int,
+    too_large: Callable[[], Exception],
+) -> httpx.Response:
+    response = await client.send(request, stream=True)
+    body = bytearray()
+    try:
+        async for chunk in response.aiter_bytes():
+            body += chunk
+            if len(body) > max_bytes:
+                raise too_large()
+    finally:
+        await response.aclose()
+    # The body is already decoded, so the copy must not decode it again.
+    headers = [
+        (name, value)
+        for name, value in response.headers.raw
+        if name.lower() not in (b"content-encoding", b"content-length")
+    ]
+    return httpx.Response(
+        response.status_code, headers=headers, content=bytes(body), request=request
+    )
+
+
+async def wait_before_retry(
+    access: RemoteModelAccess,
+    sleep: Sleep,
+    failures: int,
+    response: httpx.Response | None,
+    reason: str,
+) -> None:
+    requested = _retry_after_seconds(response)
+    delay = RETRY_BACKOFF.delay_seconds(failures) if requested is None else requested
+    delay = min(delay, RETRY_BACKOFF.cap_seconds)
+    LOGGER.warning("%s request failed (%s), retrying in %.1fs", access.provider_name, reason, delay)
+    await sleep(delay)
+
+
+# Some servers echo the key in their errors, and the message reaches users.
+def redacted_detail(access: RemoteModelAccess, response: httpx.Response) -> str:
+    detail = response_detail(response)
+    if access.api_key:
+        detail = detail.replace(access.api_key.get_secret_value(), "[API key]")
+    return detail
 
 
 def _first_problem(error: ValidationError) -> str:

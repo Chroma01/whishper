@@ -1,5 +1,6 @@
 import {
   MODEL_CACHE_VERSION,
+  type AdapterModel,
   type ModelCacheJobPayload,
   type WorkerManifest,
 } from "@anysub/contracts";
@@ -40,6 +41,19 @@ export function workerModelInventories(
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+// Only the workers that have models for the purpose, with only those models.
+export function modelInventoriesFor(
+  executor: Executor,
+  purpose: InventoryModel["purpose"],
+): WorkerModelInventory[] {
+  return workerModelInventories(executor)
+    .map((worker) => ({
+      ...worker,
+      models: worker.models.filter((model) => model.purpose === purpose),
+    }))
+    .filter((worker) => worker.models.length > 0);
+}
+
 function taskKey(workerId: string, adapterId: string, modelId: string): string {
   return `${workerId}/${modelKey(adapterId, modelId)}`;
 }
@@ -53,12 +67,14 @@ function inventoryFor(
   const models: InventoryModel[] = [];
   for (const adapter of manifest.adapters) {
     for (const model of adapter.models) {
-      if (!model.capabilities.includes("transcribe")) continue;
+      const purpose = modelPurpose(model);
+      if (!purpose) continue;
       const outcome = latest.get(
         taskKey(manifest.workerId, adapter.id, model.id),
       );
       models.push({
         ...describeModel(adapter, model, hardware, precision),
+        purpose,
         task: outcome?.task ?? null,
         failure: outcome?.failure ?? null,
       });
@@ -72,6 +88,12 @@ function inventoryFor(
     manageable: manifest.capabilities.modelCache === MODEL_CACHE_VERSION,
     models: models.sort(compareModels),
   };
+}
+
+function modelPurpose(model: AdapterModel): InventoryModel["purpose"] | null {
+  if (model.capabilities.includes("transcribe")) return "transcription";
+  if (model.capabilities.includes("translate")) return "translation";
+  return null;
 }
 
 // Jobs arrive newest first, so the first one seen for a model is its outcome.

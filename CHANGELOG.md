@@ -8,10 +8,14 @@ Anysub follows [Semantic Versioning](https://semver.org). The web and worker ima
 
 - Search looks inside every transcript as well as project names, and lists each matching line with its time. Clicking a line opens the studio there. Put words in quotes for a phrase, or a minus before a word to leave it out. Filters narrow the list by language, status and date added, and the results can be sorted. Press `/` to jump to the search box.
 - Find and replace in the studio, with `Ctrl/Command+F`. It can match case, whole words or a regular expression, and one undo reverses a **Replace all**.
+- Translation. **Translate** in the studio title bar turns an original transcript into one or more languages, each a new transcript with the same timing. It uses a provider's chat model, or MADLAD-400 on your own server so nothing leaves it. Set it up under **Administration > Translation**.
+- The New transcript form points out when the project already has a transcript from the same model, audio track and language.
 
 ### Changed
 
 - The library's **Subtitle text** checkbox is gone: search always includes transcripts.
+- Administration groups its pages into **Features** and **System**. The **Local models** page is gone: speech models are now listed and downloaded under **Transcription**, and MADLAD-400 under **Translation**.
+- Update the web and worker images together. This web version refuses workers older than 4.4.
 
 ## [4.3.0] - 2026-11-17
 

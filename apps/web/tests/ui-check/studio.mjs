@@ -117,6 +117,48 @@ async function checkTranscriptMenu(page, theme) {
   return failures;
 }
 
+// Opened from the transcript menu, then from the button beside it. Without a
+// model set up, the dialog says how to set one up, and that is checked the
+// same way.
+async function checkTranslateDialog(page, theme) {
+  const panel = page.getByRole("region", { name: "Subtitle cues" });
+  const trigger = panel.getByRole("button", { name: /transcript$/ });
+  await openMenuWithKeyboard(page, trigger);
+  await page.getByRole("menuitem", { name: "Translate…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Translate transcript" });
+  await dialog.waitFor();
+  await animationsFinished(dialog);
+  const add = dialog.getByRole("button", { name: /^Translate into/ });
+  if (await add.count()) {
+    await add.click();
+    const option = page.getByRole("option").first();
+    const language = (await option.innerText()).split("\n")[0].trim();
+    await option.click();
+    const chosen = dialog.getByRole("button", { name: `Remove ${language}` });
+    if (!(await chosen.count())) {
+      throw new Error(
+        "choosing a language in the translate dialog did not add it",
+      );
+    }
+  }
+  await page.screenshot({
+    path: `${outputDir}/studio-translate-${theme}-1440.png`,
+  });
+  const failures = reportViolations(
+    await axeViolations(page, "dialog[open]"),
+    { name: "studio-translate" },
+    theme,
+    1440,
+  );
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Translate", exact: true }).click();
+  await dialog.waitFor();
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  return failures;
+}
+
 async function checkExportMenu(page) {
   const trigger = page.getByRole("button", { name: "Export" });
   await openMenuWithKeyboard(page, trigger);
@@ -211,12 +253,13 @@ export async function checkStudioKeyboard(context, theme) {
     await checkPaneSeparator(page);
     let failures = await checkNewTranscriptDialog(page, theme);
     failures += await checkTranscriptMenu(page, theme);
+    failures += await checkTranslateDialog(page, theme);
     await checkExportMenu(page);
     await checkSpeedMenu(page);
     failures += await checkMediaDialog(page, theme);
     failures += await checkFindBar(page, theme);
     console.log(
-      `${label}: separator, new transcript dialog, pickers, transcript menu, export menu, speed menu, media dialog and find bar ok`,
+      `${label}: separator, new transcript dialog, pickers, transcript menu, translate dialog, export menu, speed menu, media dialog and find bar ok`,
     );
     return failures;
   } catch (error) {
@@ -286,7 +329,14 @@ async function focusedLabel(page) {
 
 async function checkShortcutGuide(page, theme) {
   const trigger = page.getByRole("button", { name: "Keyboard shortcuts" });
-  await trigger.click();
+  // Phones hide the button, so the guide opens from the keyboard there.
+  const hasButton = await trigger.isVisible();
+  if (hasButton) {
+    await trigger.click();
+  } else {
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press("?");
+  }
   const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await dialog.waitFor();
   await animationsFinished(dialog);
@@ -301,7 +351,7 @@ async function checkShortcutGuide(page, theme) {
   );
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
-  if (!(await isFocused(trigger))) {
+  if (hasButton && !(await isFocused(trigger))) {
     throw new Error("closing the shortcut guide did not refocus its trigger");
   }
   return failures;

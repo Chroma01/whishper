@@ -142,7 +142,7 @@
       <span>
         Not downloaded yet, so the first transcription waits for the download.
         <a
-          href="/admin/models"
+          href="#local-models"
           class="font-medium text-accent underline-offset-2 hover:underline"
           >Download it now</a
         >.

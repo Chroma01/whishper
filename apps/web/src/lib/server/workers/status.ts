@@ -141,9 +141,12 @@ function summarizeJob(
   return {
     ...common,
     kind: payload.kind,
-    title:
-      payload.kind === "transcribe"
-        ? `Transcribing ${project}`
-        : `Preparing ${project}`,
+    title: `${JOB_VERBS[payload.kind]} ${project}`,
   };
 }
+
+const JOB_VERBS = {
+  transcribe: "Transcribing",
+  translate: "Translating",
+  media_prepare: "Preparing",
+} as const;

@@ -23,7 +23,7 @@ import {
   type TranscriptionModel,
 } from "#lib/shared/transcription-models.ts";
 
-const FIT_RANK: Record<ModelFit, number> = {
+export const FIT_RANK: Record<ModelFit, number> = {
   poor: 0,
   unknown: 1,
   caution: 2,

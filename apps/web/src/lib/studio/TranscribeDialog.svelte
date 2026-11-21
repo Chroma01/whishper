@@ -2,6 +2,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import type { AudioTrack } from "#lib/shared/audio-tracks.ts";
   import type { TranscriptionDefaults } from "#lib/shared/instance-settings.ts";
+  import type { SubtitleTrackSummary } from "#lib/shared/subtitles.ts";
   import type {
     AvailableTranscriptionModel,
     DetectedWorkerHardware,
@@ -16,6 +17,7 @@
     mediaDurationUs: number | null;
     audioTracks: AudioTrack[];
     audioTrack: number;
+    transcripts: SubtitleTrackSummary[];
     onbeforesubmit: () => Promise<string | null>;
   };
 
@@ -27,6 +29,7 @@
     mediaDurationUs,
     audioTracks,
     audioTrack,
+    transcripts,
     onbeforesubmit,
   }: Props = $props();
 </script>
@@ -39,6 +42,7 @@
     {mediaDurationUs}
     {audioTracks}
     {audioTrack}
+    {transcripts}
     {onbeforesubmit}
   />
 </Dialog>

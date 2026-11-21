@@ -58,4 +58,5 @@ export type IconName =
   | "expand"
   | "audio-lines"
   | "chevron-up"
-  | "replace";
+  | "replace"
+  | "languages";

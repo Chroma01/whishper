@@ -1,30 +1,44 @@
+"""Downloads and removes models kept in the Hugging Face cache layout."""
+
 from __future__ import annotations
 
 import asyncio
 import os
 import shutil
-import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol
 
-from anysub_worker.adapter import AdapterExecutionError, ProgressReporter
-from anysub_worker.threads import run_in_thread
-
-from .profiles import ModelProfile
+from .adapter import AdapterExecutionError, ProgressReporter
+from .threads import run_in_thread
 
 PROGRESS_INTERVAL_SECONDS = 1.0
 # The download size is an estimate, so only an exited download reports complete.
 MAX_RUNNING_PROGRESS = 0.99
-DOWNLOAD_MODULE = f"{__package__}.download"
 STDERR_TAIL_BYTES = 4 * 1024
 
 
+class HubModel(Protocol):
+    @property
+    def display_name(self) -> str: ...
+
+    @property
+    def download_size_bytes(self) -> int: ...
+
+    def cache_directory(self, model_root: Path) -> Path: ...
+
+    def is_downloaded(self, model_root: Path) -> bool: ...
+
+
+# The command runs as a child process that downloads the model into
+# model_root, so that a cancelled download stops at once instead of finishing
+# in an abandoned thread.
 async def download_profile(
-    profile: ModelProfile,
+    profile: HubModel,
     model_root: Path,
     report_progress: ProgressReporter,
     *,
-    command: Sequence[str] | None = None,
+    command: Sequence[str],
 ) -> None:
     model_root.mkdir(parents=True, exist_ok=True)
     try:
@@ -45,15 +59,15 @@ async def download_profile(
 
 
 async def _run_download(
-    profile: ModelProfile,
+    profile: HubModel,
     model_root: Path,
     report_progress: ProgressReporter,
-    command: Sequence[str] | None,
+    command: Sequence[str],
 ) -> None:
     message = f"Downloading {profile.display_name}"
     await report_progress(_downloaded_fraction(profile, model_root), message)
     process = await asyncio.create_subprocess_exec(
-        *(command or (sys.executable, "-m", DOWNLOAD_MODULE, profile.id, str(model_root))),
+        *command,
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
@@ -94,14 +108,14 @@ async def _run_download(
         )
 
 
-async def delete_profile(profile: ModelProfile, model_root: Path) -> None:
+async def delete_profile(profile: HubModel, model_root: Path) -> None:
     cache_directory = profile.cache_directory(model_root)
     lock_directory = model_root / ".locks" / cache_directory.name
     for directory in (cache_directory, lock_directory):
         await run_in_thread(shutil.rmtree, directory, ignore_errors=True)
 
 
-def _require_free_space(profile: ModelProfile, model_root: Path) -> None:
+def _require_free_space(profile: HubModel, model_root: Path) -> None:
     # Partial files count as free space: the download resumes them, and a
     # download that does not fit removes them.
     usable = shutil.disk_usage(model_root).free + _blob_bytes(profile, model_root)
@@ -115,11 +129,11 @@ def _require_free_space(profile: ModelProfile, model_root: Path) -> None:
         )
 
 
-def _downloaded_fraction(profile: ModelProfile, model_root: Path) -> float:
+def _downloaded_fraction(profile: HubModel, model_root: Path) -> float:
     return min(_blob_bytes(profile, model_root) / profile.download_size_bytes, MAX_RUNNING_PROGRESS)
 
 
-def _blob_bytes(profile: ModelProfile, model_root: Path) -> int:
+def _blob_bytes(profile: HubModel, model_root: Path) -> int:
     return _directory_bytes(profile.cache_directory(model_root) / "blobs")
 
 
@@ -138,7 +152,7 @@ def _directory_bytes(directory: Path) -> int:
     return total
 
 
-def _discard_unfinished(profile: ModelProfile, model_root: Path) -> None:
+def _discard_unfinished(profile: HubModel, model_root: Path) -> None:
     if not profile.is_downloaded(model_root):
         shutil.rmtree(profile.cache_directory(model_root), ignore_errors=True)
 

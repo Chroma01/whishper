@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -46,6 +47,23 @@ class TranscriptionAdapter(Adapter, Protocol):
     async def transcribe(
         self, request: TranscriptionRequest, report_progress: ProgressReporter
     ) -> TranscriptArtifact: ...
+
+
+@dataclass(frozen=True)
+class TextTranslationRequest:
+    model_id: str
+    texts: tuple[str, ...]
+    source_language: str
+    target_language: str
+
+
+@runtime_checkable
+class TranslationAdapter(Adapter, Protocol):
+    """Translates each text on its own and returns the translations in order."""
+
+    async def translate(
+        self, request: TextTranslationRequest, report_progress: ProgressReporter
+    ) -> list[str]: ...
 
 
 @runtime_checkable

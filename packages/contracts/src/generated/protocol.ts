@@ -11,24 +11,30 @@ export type ProtocolMessage =
 export type MediaPreparationVersion = "1.0";
 export type ModelCacheVersion = "1.0";
 export type RemoteTranscriptionVersion = "1.0";
-export type AdapterCapability = "transcribe" | "align";
+export type TranslationVersion = "1.0";
+export type AdapterCapability = "transcribe" | "align" | "translate";
 export type WorkerDevice = "cpu" | "cuda";
 export type JobFailureCode =
   | "adapter_error"
   | "adapter_unavailable"
   | "media_preparation_error"
-  | "model_cache_error";
+  | "model_cache_error"
+  | "translation_error";
 export type JobCompletion =
   | TranscriptionJobCompletion
   | MediaPreparationJobCompletion
-  | ModelCacheJobCompletion;
+  | ModelCacheJobCompletion
+  | TranslationJobCompletion;
 export type FrameRateMode = "constant" | "variable" | "unknown";
 export type MediaStreamType =
   "audio" | "video" | "subtitle" | "data" | "attachment" | "unknown";
 export type MediaDerivativeKind = "waveform" | "thumbnail" | "proxy";
 export type ModelCacheAction = "download" | "delete";
 export type WorkerJobPayload =
-  TranscriptionJobPayload | MediaPreparationJobPayload | ModelCacheJobPayload;
+  | TranscriptionJobPayload
+  | MediaPreparationJobPayload
+  | ModelCacheJobPayload
+  | TranslationJobPayload;
 
 export interface WorkerManifest {
   protocolVersion: "1.1";
@@ -45,6 +51,7 @@ export interface WorkerCapabilities {
   mediaPreparation: MediaPreparationVersion | null;
   modelCache: ModelCacheVersion | null;
   remoteTranscription: RemoteTranscriptionVersion | null;
+  translation: TranslationVersion | null;
 }
 export interface AdapterManifest {
   protocolVersion: "1.1";
@@ -209,6 +216,17 @@ export interface ModelCacheJobCompletion {
   kind: "model_cache";
   action: ModelCacheAction;
 }
+export interface TranslationJobCompletion {
+  kind: "translate";
+  language: string;
+  cues: TranslatedCue[];
+  adapter: AdapterReference;
+}
+export interface TranslatedCue {
+  startUs: number;
+  endUs: number;
+  text: string;
+}
 export interface LeaseResponse {
   lease: WorkerLease | null;
   pollAfterMs?: number;
@@ -249,6 +267,27 @@ export interface ModelCacheJobPayload {
   adapterId: string;
   modelId: string;
 }
+export interface TranslationJobPayload {
+  kind: "translate";
+  adapterId: string;
+  modelId: string;
+  providerId?: string | null;
+  modelName: string;
+  projectId: string;
+  sourceTrackId: string;
+  sourceRevision: number;
+  sourceLanguage: string;
+  targetLanguage: string;
+  sourceLanguageName: string;
+  targetLanguageName: string;
+  maxLineLength: number;
+  cues: SourceCue[];
+}
+export interface SourceCue {
+  startUs: number;
+  endUs: number;
+  text: string;
+}
 export interface RemoteModelAccess {
   providerName: string;
   baseUrl: string;
@@ -261,4 +300,5 @@ export const MEDIA_PREPARATION_VERSION = "1.0";
 export const MODEL_CACHE_VERSION = "1.0";
 export const REMOTE_TRANSCRIPTION_VERSION = "1.0";
 export const TRANSCRIPT_SCHEMA_VERSION = "1.0";
+export const TRANSLATION_VERSION = "1.0";
 export const WORKER_PROTOCOL_VERSION = "1.1";

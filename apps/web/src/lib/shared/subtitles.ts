@@ -11,9 +11,17 @@ export type SubtitleTrackSummary = {
   name: string;
   language: string;
   cueCount: number;
+  revision: number;
   runId: string | null;
+  // The transcription run or translation job that made it.
+  madeBy: string | null;
+  // The model that made it, keyed as the transcribe and translate forms key
+  // their choices. Null when Anysub no longer knows it.
+  modelKey: string | null;
   // Null for transcripts made before Anysub recorded the audio track.
   audioTrack: number | null;
+  // Set on a translation: the transcript and revision it was made from.
+  translatedFrom: { trackId: string; revision: number } | null;
   createdAt: Date;
 };
 

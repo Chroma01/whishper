@@ -11,7 +11,13 @@ from typing import Any, Protocol
 
 import httpx
 
-from .adapter import AdapterExecutionError, ProgressReporter, TranscriptionAdapter
+from .adapter import (
+    AdapterExecutionError,
+    ProgressReporter,
+    TextTranslationRequest,
+    TranscriptionAdapter,
+    TranslationAdapter,
+)
 from .client import WORKER_VERSION
 from .errors import LeaseLostError, UnreadableJobError, describe_error, failure_for
 from .media.errors import MediaPreparationError
@@ -30,12 +36,17 @@ from .models import (
     ModelCacheJobPayload,
     TranscriptionJobCompletion,
     TranscriptionJobPayload,
+    TranslationJobCompletion,
+    TranslationJobPayload,
     WorkerJobPayload,
     WorkerLease,
 )
 from .progress import progress_span
 from .registry import AdapterLoadError, AdapterRegistry
 from .remote.transcribe import transcribe_remotely
+from .translation.errors import TranslationError
+from .translation.pipeline import TranslateTexts, translate_cues
+from .translation.remote import translate_remotely
 from .workspace import WORK_DIRECTORY_PREFIX
 
 LOGGER = logging.getLogger(__name__)
@@ -170,6 +181,8 @@ def _fallback_failure_code(payload: WorkerJobPayload) -> JobFailureCode:
         return AdapterExecutionError.code
     if isinstance(payload, ModelCacheJobPayload):
         return ModelCacheError.code
+    if isinstance(payload, TranslationJobPayload):
+        return TranslationError.code
     return MediaPreparationError.code
 
 
@@ -186,6 +199,8 @@ async def _run(
         completion = await run_model_cache_job(registry, payload, report)
         await _refresh_manifest(client, lease)
         await client.complete(lease, completion)
+    elif isinstance(payload, TranslationJobPayload):
+        await _run_translation(client, registry, lease, payload, report)
     else:
         await _run_media_preparation(client, lease, payload, report)
 
@@ -281,6 +296,68 @@ async def _run_remote_transcription(
             ),
         ),
     )
+
+
+async def _run_translation(
+    client: JobClient,
+    registry: AdapterRegistry,
+    lease: WorkerLease,
+    payload: TranslationJobPayload,
+    report: ProgressReporter,
+) -> None:
+    await report(0.0, "Starting translation")
+    translate, adapter = _text_translator(registry, lease, payload)
+    cues = await translate_cues(payload, translate, report)
+    await client.complete(
+        lease,
+        TranslationJobCompletion(language=payload.target_language, cues=cues, adapter=adapter),
+    )
+
+
+def _text_translator(
+    registry: AdapterRegistry, lease: WorkerLease, payload: TranslationJobPayload
+) -> tuple[TranslateTexts, AdapterReference]:
+    if payload.adapter_id == REMOTE_ADAPTER_ID:
+        access = lease.remote
+        if access is None:
+            raise AdapterLoadError(
+                "The application sent no provider details for this translation. Update the "
+                "application to the version of the worker, then try again."
+            )
+
+        async def translate_with_provider(texts: list[str], report: ProgressReporter) -> list[str]:
+            return await translate_remotely(
+                texts,
+                access,
+                payload.model_name,
+                payload.source_language_name,
+                payload.target_language_name,
+                report,
+            )
+
+        reference = AdapterReference(
+            id=REMOTE_ADAPTER_ID, version=WORKER_VERSION, modelId=access.model
+        )
+        return translate_with_provider, reference
+
+    adapter = registry.require(payload.adapter_id, payload.model_id, AdapterCapability.TRANSLATE)
+    if not isinstance(adapter, TranslationAdapter):
+        raise AdapterLoadError(
+            f"adapter {payload.adapter_id} declares translation support but does not implement it"
+        )
+
+    async def translate_locally(texts: list[str], report: ProgressReporter) -> list[str]:
+        request = TextTranslationRequest(
+            model_id=payload.model_id,
+            texts=tuple(texts),
+            source_language=payload.source_language,
+            target_language=payload.target_language,
+        )
+        return await adapter.translate(request, report)
+
+    manifest = adapter.manifest
+    reference = AdapterReference(id=manifest.id, version=manifest.version, modelId=payload.model_id)
+    return translate_locally, reference
 
 
 def _safe_suffix(filename: str) -> str:

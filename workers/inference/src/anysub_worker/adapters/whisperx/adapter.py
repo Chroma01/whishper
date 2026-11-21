@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import logging
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from importlib import import_module
@@ -20,6 +21,7 @@ from anysub_worker.adapter import (
 from anysub_worker.config import AdapterRuntimeSettings
 from anysub_worker.errors import describe_error
 from anysub_worker.hardware import usable_cpu_count
+from anysub_worker.hub_cache import delete_profile, download_profile
 from anysub_worker.models import (
     AdapterCapability,
     AdapterManifest,
@@ -34,7 +36,6 @@ from anysub_worker.transcripts.normalize import normalize_segments
 from anysub_worker.transcripts.segments import WhisperSegment
 
 from .audio import load_audio_track
-from .cache import delete_profile, download_profile
 from .options import TranscriptionOptions, options_schema, parse_options
 from .profiles import MODEL_PROFILES, ModelProfile, find_profile
 from .subtitles import split_subtitle_segments
@@ -44,6 +45,7 @@ MODEL_DOWNLOAD_SPAN = (0.0, 0.1)
 # CTranslate2 reports a compute type the device cannot run as a plain ValueError.
 UNSUPPORTED_COMPUTE_TYPE = "compute type"
 LOGGER = logging.getLogger(__name__)
+DOWNLOAD_MODULE = f"{__package__}.download"
 
 
 class _ModelKey(NamedTuple):
@@ -92,7 +94,7 @@ class WhisperXAdapter:
         )
 
     async def download_model(self, model_id: str, report_progress: ProgressReporter) -> None:
-        await download_profile(self._profile(model_id), self._model_root, report_progress)
+        await self._download(self._profile(model_id), report_progress)
 
     async def delete_model(self, model_id: str) -> None:
         if self._model_key is not None and self._model_key.model_id == model_id:
@@ -108,9 +110,7 @@ class WhisperXAdapter:
         _require_supported_language(request.language)
         profile = self._profile(request.model_id)
         if not profile.is_downloaded(self._model_root):
-            await download_profile(
-                profile, self._model_root, progress_span(report_progress, *MODEL_DOWNLOAD_SPAN)
-            )
+            await self._download(profile, progress_span(report_progress, *MODEL_DOWNLOAD_SPAN))
 
         await report_progress(MODEL_DOWNLOAD_SPAN[1], "Loading source audio")
         audio = await load_audio_track(media_path, request.audio_track)
@@ -267,6 +267,14 @@ class WhisperXAdapter:
     @property
     def _model_root(self) -> Path:
         return self._runtime.model_root / "whisperx"
+
+    async def _download(self, profile: ModelProfile, report_progress: ProgressReporter) -> None:
+        await download_profile(
+            profile,
+            self._model_root,
+            report_progress,
+            command=(sys.executable, "-m", DOWNLOAD_MODULE, profile.id, str(self._model_root)),
+        )
 
     def _profile(self, model_id: str) -> ModelProfile:
         profile = find_profile(model_id)

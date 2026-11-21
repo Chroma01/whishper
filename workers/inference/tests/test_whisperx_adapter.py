@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -454,7 +454,12 @@ class RecordingDownloads:
         self.model_ids: list[str] = []
 
     async def __call__(
-        self, profile: ModelProfile, model_root: Path, report_progress: ProgressReporter
+        self,
+        profile: ModelProfile,
+        model_root: Path,
+        report_progress: ProgressReporter,
+        *,
+        command: Sequence[str],
     ) -> None:
         self.model_ids.append(profile.id)
         await report_progress(0.5, f"Downloading {profile.display_name}")

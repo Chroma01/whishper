@@ -3,6 +3,7 @@ import { and, asc, count, eq, inArray, sum } from "drizzle-orm";
 
 import { db, type Executor } from "#lib/server/db/index.ts";
 import {
+  instanceSettings,
   providerModels,
   transcriptionProviders,
   transcriptionRuns,
@@ -95,11 +96,18 @@ export function updateProvider(id: string, changes: ProviderChanges): void {
   if (!updated) throw notFound("That provider no longer exists.");
 }
 
-// Queued transcriptions of its models fail when a worker asks for them.
+// Queued transcriptions and translations with it fail when a worker asks for
+// them.
 export function deleteProvider(id: string): void {
-  db.delete(transcriptionProviders)
-    .where(eq(transcriptionProviders.id, id))
-    .run();
+  withTransaction((tx) => {
+    tx.delete(transcriptionProviders)
+      .where(eq(transcriptionProviders.id, id))
+      .run();
+    tx.update(instanceSettings)
+      .set({ translationProviderId: null, translationModel: null })
+      .where(eq(instanceSettings.translationProviderId, id))
+      .run();
+  });
 }
 
 export function addProviderModels(

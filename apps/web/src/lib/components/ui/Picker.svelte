@@ -34,6 +34,8 @@
     selection: Snippet<[T | undefined]>;
     option: Snippet<[T]>;
     children?: Snippet;
+    // Runs after each choice, for a picker that adds to a list.
+    onpick?: (key: string) => void;
   };
 
   let {
@@ -52,6 +54,7 @@
     selection,
     option,
     children,
+    onpick,
   }: Props = $props();
 
   const TYPEAHEAD_RESET_MS = 500;
@@ -119,6 +122,7 @@
     const picked = visibleOptions[index];
     if (picked === undefined) return;
     value = key(picked);
+    onpick?.(value);
     panel.hidePopover();
   }
 

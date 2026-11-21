@@ -26,7 +26,7 @@
     MIN_LINE_LENGTH,
     type TranscriptionDefaults,
   } from "#lib/shared/instance-settings.ts";
-  import { DETECT_LANGUAGE } from "#lib/shared/languages.ts";
+  import { DETECT_LANGUAGE, languageName } from "#lib/shared/languages.ts";
   import { MAX_BATCH_SIZE, MAX_PROMPT_LENGTH } from "#lib/shared/limits.ts";
   import { formatDuration } from "#lib/shared/format.ts";
   import {
@@ -34,6 +34,7 @@
     formatUsd,
     priceForDuration,
   } from "#lib/shared/money.ts";
+  import type { SubtitleTrackSummary } from "#lib/shared/subtitles.ts";
   import {
     acceptsOption,
     defaultModelKey,
@@ -42,6 +43,7 @@
   import AudioTrackPicker from "./AudioTrackPicker.svelte";
   import LanguagePicker from "./LanguagePicker.svelte";
   import ModelPicker from "./ModelPicker.svelte";
+  import { matchingTranscript } from "./transcripts.ts";
 
   type Props = {
     models: AvailableTranscriptionModel[];
@@ -51,6 +53,8 @@
     audioTracks?: AudioTrack[];
     // The track the studio plays, which a new transcript starts on.
     audioTrack?: number;
+    // The project's transcripts, to point out one this run would repeat.
+    transcripts?: SubtitleTrackSummary[];
     // Resolves to an error message when the transcription must not start.
     onbeforesubmit?: () => Promise<string | null>;
     intro?: Snippet;
@@ -63,6 +67,7 @@
     mediaDurationUs = null,
     audioTracks = [],
     audioTrack = 0,
+    transcripts = [],
     onbeforesubmit,
     intro,
   }: Props = $props();
@@ -104,6 +109,14 @@
   let language = $state(defaults.language ?? DETECT_LANGUAGE);
   // svelte-ignore state_referenced_locally
   let pickedAudioTrack = $state(audioTrack);
+  const repeated = $derived(
+    selectedModel &&
+      matchingTranscript(transcripts, {
+        modelKey: selectedModel.key,
+        language: language === DETECT_LANGUAGE ? null : language,
+        audioTrack: pickedAudioTrack,
+      }),
+  );
 
   // A track tagged with a language Whisper knows sets the spoken language.
   function pickAudioTrack(index: number): void {
@@ -275,9 +288,22 @@
                 About {formatUsd(estimatedCost)} for {formatDuration(
                   mediaDurationUs,
                 )}.
-              {:else if remote.priceMicrosPerMinute !== null}
+              {:else if remote.priceMicrosPerMinute != null}
                 {formatPricePerMinute(remote.priceMicrosPerMinute)}.
               {/if}
+            </span>
+          </p>
+        {/if}
+        {#if repeated}
+          <p class="flex items-start gap-1.5 text-xs text-text-muted">
+            <span class="mt-px shrink-0" aria-hidden="true">
+              <Icon name="copy" size={14} />
+            </span>
+            <span>
+              This project already has a transcript in {languageName(
+                repeated.language,
+              )} from this model. With the same settings, a new one usually comes
+              out the same.
             </span>
           </p>
         {/if}

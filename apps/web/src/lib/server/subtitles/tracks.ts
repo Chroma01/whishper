@@ -1,8 +1,19 @@
 import { and, asc, count, eq, sql } from "drizzle-orm";
 
 import type { Executor } from "#lib/server/db/index.ts";
-import { cues, subtitleTracks } from "#lib/server/db/schema.ts";
+import {
+  cues,
+  subtitleTracks,
+  transcriptionRuns,
+} from "#lib/server/db/schema.ts";
 import { transcriptAudioTrack } from "#lib/shared/audio-tracks.ts";
+import { isRecord } from "#lib/shared/is-record.ts";
+import { modelKey } from "#lib/shared/transcription-models.ts";
+import {
+  PROVIDER_TRANSLATION,
+  translationOrigin,
+  type TranslationOrigin,
+} from "#lib/shared/translation.ts";
 import type {
   SubtitleTrack,
   SubtitleTrackSummary,
@@ -47,17 +58,51 @@ export function listProjectTracks(
       language: subtitleTracks.language,
       metadata: subtitleTracks.metadata,
       cueCount: count(cues.id),
+      revision: subtitleTracks.revision,
       runId: subtitleTracks.sourceRunId,
+      runAdapterId: transcriptionRuns.adapterId,
+      runModelId: transcriptionRuns.modelId,
       createdAt: subtitleTracks.createdAt,
     })
     .from(subtitleTracks)
     .leftJoin(cues, eq(cues.trackId, subtitleTracks.id))
+    .leftJoin(
+      transcriptionRuns,
+      eq(transcriptionRuns.id, subtitleTracks.sourceRunId),
+    )
     .where(eq(subtitleTracks.projectId, projectId))
     .groupBy(subtitleTracks.id)
     .orderBy(asc(subtitleTracks.createdAt), asc(sql`${subtitleTracks}.rowid`))
     .all()
-    .map(({ metadata, ...track }) => ({
-      ...track,
-      audioTrack: transcriptAudioTrack(metadata),
-    }));
+    .map(({ metadata, runAdapterId, runModelId, ...track }) => {
+      const origin = translationOrigin(metadata);
+      return {
+        ...track,
+        madeBy: track.runId ?? origin?.jobId ?? null,
+        modelKey:
+          runAdapterId && runModelId
+            ? modelKey(runAdapterId, runModelId)
+            : origin && translationModelKey(metadata, origin),
+        audioTrack: transcriptAudioTrack(metadata),
+        translatedFrom: origin && {
+          trackId: origin.sourceTrackId,
+          revision: origin.sourceRevision,
+        },
+      };
+    });
+}
+
+// Every provider translation is offered as one choice, whichever chat model
+// the administrator picked.
+function translationModelKey(
+  metadata: Record<string, unknown>,
+  origin: TranslationOrigin,
+): string | null {
+  if (!origin.local) return PROVIDER_TRANSLATION;
+  const adapter = metadata.adapter;
+  return isRecord(adapter) &&
+    typeof adapter.id === "string" &&
+    typeof adapter.modelId === "string"
+    ? modelKey(adapter.id, adapter.modelId)
+    : null;
 }

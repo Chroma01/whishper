@@ -3,6 +3,9 @@ import type {
   TranscriptArtifact,
   TranscriptionJobCompletion,
   TranscriptionJobPayload,
+  TranslatedCue,
+  TranslationJobCompletion,
+  TranslationJobPayload,
   WorkerJobPayload,
 } from "@anysub/contracts";
 import { and, eq } from "drizzle-orm";
@@ -26,7 +29,9 @@ import {
 } from "#lib/server/media/finalize.ts";
 import { withKeyedLock } from "#lib/server/storage/keyed-lock.ts";
 import { insertCues } from "#lib/server/subtitles/cues.ts";
+import { transcriptAudioTrack } from "#lib/shared/audio-tracks.ts";
 import { priceForDuration } from "#lib/shared/money.ts";
+import type { TranslationOrigin } from "#lib/shared/translation.ts";
 import { REMOTE_ADAPTER_ID } from "#lib/shared/transcription-models.ts";
 
 type CompletionOutcome = "completed" | "already-completed" | "lease-rejected";
@@ -59,6 +64,24 @@ export async function completeJob(
         storeTranscript(tx, current.runId, payload, completion);
         markCompleted(tx, jobId, current.runId, completion);
         recordRemoteCost(tx, current.runId, payload, completion.artifact);
+        return "completed";
+      });
+    }
+
+    if (job.payload.kind === "translate") {
+      if (
+        completion.kind !== "translate" ||
+        completion.language !== job.payload.targetLanguage
+      ) {
+        throw completionKindMismatch();
+      }
+      assertCueOrder(completion.cues);
+      const payload = job.payload;
+      return withTransaction((tx) => {
+        const current = leasedJob(tx, jobId, leaseToken);
+        if (typeof current === "string") return current;
+        storeTranslation(tx, jobId, payload, completion);
+        markCompleted(tx, jobId, null, completion);
         return "completed";
       });
     }
@@ -193,6 +216,52 @@ function storeTranscript(
   insertCues(tx, track.id, { ids: "generate", cues: artifact.cues });
 }
 
+// The translation keeps the source's audio track and length, so it plays and
+// edits like the transcript it came from.
+function storeTranslation(
+  tx: Executor,
+  jobId: string,
+  payload: TranslationJobPayload,
+  completion: TranslationJobCompletion,
+): void {
+  const source = tx
+    .select({ metadata: subtitleTracks.metadata })
+    .from(subtitleTracks)
+    .where(eq(subtitleTracks.id, payload.sourceTrackId))
+    .get()?.metadata;
+  const origin: TranslationOrigin = {
+    jobId,
+    sourceTrackId: payload.sourceTrackId,
+    sourceRevision: payload.sourceRevision,
+    sourceLanguage: payload.sourceLanguage,
+    modelLabel: payload.modelName,
+    local: payload.adapterId !== REMOTE_ADAPTER_ID,
+  };
+  const track = tx
+    .insert(subtitleTracks)
+    .values({
+      projectId: payload.projectId,
+      name: `Translation · ${payload.modelName}`,
+      language: payload.targetLanguage,
+      kind: "translation",
+      metadata: {
+        adapter: completion.adapter,
+        ...(source?.durationUs === undefined
+          ? {}
+          : { durationUs: source.durationUs }),
+        audioTrack: transcriptAudioTrack(source ?? {}) ?? 0,
+        maxLineLength: payload.maxLineLength,
+        translation: origin,
+      },
+    })
+    .returning({ id: subtitleTracks.id })
+    .get();
+  insertCues(tx, track.id, {
+    ids: "generate",
+    cues: completion.cues.map((cue) => ({ ...cue, words: [] })),
+  });
+}
+
 // Uses the length of the audio the provider received and the model's price
 // at that moment. The provider's own bill is what counts.
 function recordRemoteCost(
@@ -227,6 +296,16 @@ function trackName({ adapter, artifact }: TranscriptionJobCompletion): string {
 
 function completionKindMismatch(): Error {
   return unprocessable("Worker completion does not match the leased job.");
+}
+
+function assertCueOrder(cues: TranslatedCue[]): void {
+  let previousStart = -1;
+  for (const cue of cues) {
+    if (cue.endUs < cue.startUs || cue.startUs < previousStart) {
+      throw unprocessable("Translated cues are not in order.");
+    }
+    previousStart = cue.startUs;
+  }
 }
 
 function assertTranscriptTiming(artifact: TranscriptArtifact): void {

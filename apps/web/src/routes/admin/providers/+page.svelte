@@ -16,7 +16,7 @@
 
 <SectionHeader
   title="External providers"
-  description="Transcribe with a speech service such as OpenAI or Groq, or with your own server that speaks the same API. Its models appear next to the local ones, and people choose between them each time they transcribe."
+  description="Transcribe with a speech service such as OpenAI or Groq, or with your own server that speaks the same API. Its models appear next to the local ones, and people choose between them each time they transcribe. To translate with one of its chat models, choose it in Translation."
 />
 
 {#if added}

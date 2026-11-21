@@ -61,6 +61,22 @@ const SPEECH_MODEL = /whisper|transcri|speech|\bstt\b|\basr\b/i;
 // ones but cannot take an uploaded file.
 const NOT_TRANSCRIPTION = /tts|text-to-speech|realtime/i;
 
+// Models a list names that cannot hold a conversation: speech, images,
+// embeddings and the like.
+const NOT_CHAT_MODEL =
+  /whisper|transcri|tts|speech|voxtral|\bstt\b|\basr\b|embed|rerank|dall-?e|image|moderation|realtime|audio|guard/i;
+
+// Some providers label their models with a type, which then decides.
+export function isChatModel(
+  remoteId: string,
+  type: string | null = null,
+): boolean {
+  if (type !== null && !/^(chat|llm|text|language|completion)/i.test(type)) {
+    return false;
+  }
+  return !NOT_CHAT_MODEL.test(remoteId);
+}
+
 // Some providers label each listed model with a type, such as "audio" or
 // "chat". When they do, the type decides; the name is a guess otherwise.
 // Either way it is only a hint: the worker reports a model that turns out to

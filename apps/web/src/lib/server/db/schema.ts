@@ -71,6 +71,9 @@ export const instanceSettings = sqliteTable(
     maxUploadBytes: integer("max_upload_bytes")
       .notNull()
       .default(DEFAULT_INSTANCE_SETTINGS.maxUploadBytes),
+    // Cleared when the provider is deleted.
+    translationProviderId: text("translation_provider_id"),
+    translationModel: text("translation_model"),
     updatedAt: updatedAt(),
   },
   (table) => [
@@ -278,7 +281,7 @@ export const jobs = sqliteTable(
       onDelete: "cascade",
     }),
     kind: text("kind", {
-      enum: ["transcribe", "media_prepare", "model_cache"],
+      enum: ["transcribe", "media_prepare", "model_cache", "translate"],
     }).notNull(),
     state: text("state", { enum: JOB_STATES }).notNull().default("queued"),
     priority: integer("priority").notNull().default(0),

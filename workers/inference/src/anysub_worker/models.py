@@ -10,6 +10,7 @@ type WorkerProtocolVersion = Literal["1.1"]
 type MediaPreparationVersion = Literal["1.0"]
 type ModelCacheVersion = Literal["1.0"]
 type RemoteTranscriptionVersion = Literal["1.0"]
+type TranslationVersion = Literal["1.0"]
 type TranscriptSchemaVersion = Literal["1.0"]
 
 ADAPTER_PROTOCOL_VERSION: Final[AdapterProtocolVersion] = "1.1"
@@ -17,6 +18,7 @@ WORKER_PROTOCOL_VERSION: Final[WorkerProtocolVersion] = "1.1"
 MEDIA_PREPARATION_VERSION: Final[MediaPreparationVersion] = "1.0"
 MODEL_CACHE_VERSION: Final[ModelCacheVersion] = "1.0"
 REMOTE_TRANSCRIPTION_VERSION: Final[RemoteTranscriptionVersion] = "1.0"
+TRANSLATION_VERSION: Final[TranslationVersion] = "1.0"
 TRANSCRIPT_SCHEMA_VERSION: Final[TranscriptSchemaVersion] = "1.0"
 
 
@@ -55,6 +57,7 @@ WorkerName = Annotated[str, Field(min_length=1)]
 class AdapterCapability(StrEnum):
     TRANSCRIBE = "transcribe"
     ALIGN = "align"
+    TRANSLATE = "translate"
 
 
 class AdapterModel(StrictModel):
@@ -134,6 +137,9 @@ class WorkerCapabilities(StrictModel):
     remote_transcription: RemoteTranscriptionVersion | None = Field(
         default=None, alias="remoteTranscription"
     )
+    # Runs translation jobs: with a provider's chat model, and with any
+    # installed adapter model that can translate.
+    translation: TranslationVersion | None = None
 
 
 class WorkerStorage(StrictModel):
@@ -327,10 +333,46 @@ class ModelCacheJobPayload(InboundModel):
     model_id: str = Field(alias="modelId")
 
 
-type WorkerJobPayload = TranscriptionJobPayload | MediaPreparationJobPayload | ModelCacheJobPayload
+class SourceCue(InboundModel):
+    start_us: NonNegativeWireInt = Field(alias="startUs")
+    end_us: NonNegativeWireInt = Field(alias="endUs")
+    text: str
 
 
-# Transcription jobs for this adapter ID run on a speech API the administrator
+class TranslationJobPayload(InboundModel):
+    kind: Literal["translate"]
+    adapter_id: str = Field(alias="adapterId")
+    # The remote model's own ID when adapter_id is the remote one.
+    model_id: str = Field(alias="modelId")
+    # The provider whose details the application adds to the lease. The
+    # worker reads them from there.
+    provider_id: str | None = Field(default=None, alias="providerId")
+    # Shown in progress messages.
+    model_name: str = Field(alias="modelName", min_length=1)
+    project_id: str = Field(alias="projectId")
+    source_track_id: str = Field(alias="sourceTrackId")
+    # The source's revision when the job was queued, which the application
+    # keeps with the translation. The worker does not use it.
+    source_revision: NonNegativeWireInt = Field(alias="sourceRevision")
+    source_language: str = Field(alias="sourceLanguage", min_length=1)
+    target_language: str = Field(alias="targetLanguage", min_length=1)
+    # English names, such as "Brazilian Portuguese", which chat models follow
+    # more reliably than codes.
+    source_language_name: str = Field(alias="sourceLanguageName", min_length=1)
+    target_language_name: str = Field(alias="targetLanguageName", min_length=1)
+    max_line_length: int = Field(alias="maxLineLength", ge=20, le=120)
+    cues: tuple[SourceCue, ...]
+
+
+type WorkerJobPayload = (
+    TranscriptionJobPayload
+    | MediaPreparationJobPayload
+    | ModelCacheJobPayload
+    | TranslationJobPayload
+)
+
+
+# Jobs for this adapter ID run on a provider's API that the administrator
 # configured. No installed adapter may claim it.
 REMOTE_ADAPTER_ID: Final = "remote"
 
@@ -396,8 +438,31 @@ class ModelCacheJobCompletion(StrictModel):
     action: ModelCacheAction
 
 
+class TranslatedCue(StrictModel):
+    start_us: NonNegativeWireInt = Field(alias="startUs")
+    end_us: NonNegativeWireInt = Field(alias="endUs")
+    text: str
+
+    @model_validator(mode="after")
+    def timing_is_ordered(self) -> TranslatedCue:
+        if self.end_us < self.start_us:
+            raise ValueError("cue endUs must not precede startUs")
+        return self
+
+
+class TranslationJobCompletion(StrictModel):
+    kind: Literal["translate"] = "translate"
+    language: str = Field(min_length=1)
+    cues: tuple[TranslatedCue, ...]
+    adapter: AdapterReference
+
+
 type JobFailureCode = Literal[
-    "adapter_error", "adapter_unavailable", "media_preparation_error", "model_cache_error"
+    "adapter_error",
+    "adapter_unavailable",
+    "media_preparation_error",
+    "model_cache_error",
+    "translation_error",
 ]
 
 
@@ -408,7 +473,10 @@ class JobFailure(StrictModel):
 
 
 type JobCompletion = (
-    TranscriptionJobCompletion | MediaPreparationJobCompletion | ModelCacheJobCompletion
+    TranscriptionJobCompletion
+    | MediaPreparationJobCompletion
+    | ModelCacheJobCompletion
+    | TranslationJobCompletion
 )
 
 

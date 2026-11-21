@@ -1,11 +1,11 @@
-import type { WorkerDevice } from "@anysub/contracts";
+import type { WorkerDevice, WorkerJobPayload } from "@anysub/contracts";
 
 import type { WorkerStorageSpace } from "#lib/shared/model-inventory.ts";
 
 export type WorkerState = "busy" | "idle" | "offline";
 
 export type WorkerJobSummary = {
-  kind: "transcribe" | "media_prepare" | "model_cache";
+  kind: WorkerJobPayload["kind"];
   title: string;
   progress: number;
   message: string | null;

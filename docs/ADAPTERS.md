@@ -8,13 +8,13 @@ This boundary allows first-party and administrator-built adapters for Faster-Whi
 
 ## Contract
 
-Every adapter implements the small manifest-only base protocol. Capability-specific protocols add operations such as transcription. This means, for example, a translation-only adapter, once translation exists, will not need to implement a meaningless transcription stub.
+Every adapter implements the small manifest-only base protocol. Capability-specific protocols add operations such as transcription. A translation-only adapter, such as the built-in MADLAD one, implements `translate` without a transcription stub.
 
 An adapter package must:
 
 1. Publish one entry point in the `anysub.adapters` group.
 2. Return an `AdapterManifest` using adapter protocol `1.1`.
-3. Implement the capabilities declared by each model. The only capabilities today are `transcribe` and `align`. Diarization and translation are planned and not available.
+3. Implement the capabilities declared by each model: `transcribe` and `align`, or `translate`, which takes whole sentences and returns one translation for each, in order. Diarization is planned and not available.
 4. Transcribe the audio track in `request.audio_track`. It counts audio streams from 0, like ffmpeg's `-map 0:a:N`, and `audio_track_map` in `anysub_worker.media.tracks` returns those arguments.
 5. Validate model-specific options before loading expensive model state.
 6. Return normalized Anysub artifacts with integer-microsecond timestamps.

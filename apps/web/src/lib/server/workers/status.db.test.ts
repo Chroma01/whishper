@@ -26,6 +26,7 @@ function connect(name: string): WorkerManifest {
       mediaPreparation: "1.0",
       modelCache: "1.0",
       remoteTranscription: null,
+      translation: null,
     },
     adapters: [],
     hardware: {

@@ -63,6 +63,7 @@ function connectWorker(optionsSchema: Record<string, unknown>): void {
       mediaPreparation: null,
       modelCache: null,
       remoteTranscription: null,
+      translation: null,
     },
     adapters: [
       {

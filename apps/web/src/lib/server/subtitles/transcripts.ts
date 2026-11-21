@@ -1,7 +1,13 @@
 import { and, eq } from "drizzle-orm";
 
-import { subtitleTracks, transcriptionRuns } from "#lib/server/db/schema.ts";
+import {
+  jobs,
+  subtitleTracks,
+  transcriptionRuns,
+} from "#lib/server/db/schema.ts";
 import { withTransaction } from "#lib/server/db/transaction.ts";
+import { payloadField } from "#lib/server/jobs/predicates.ts";
+import { cancelActiveJobs } from "#lib/server/jobs/release.ts";
 import { manageableProjectForUser } from "#lib/server/projects/access.ts";
 
 export function deleteTranscriptForUser(
@@ -22,6 +28,14 @@ export function deleteTranscriptForUser(
       .returning({ sourceRunId: subtitleTracks.sourceRunId })
       .get();
     if (!track) return false;
+    // A translation finishing later would point at a transcript that is gone.
+    cancelActiveJobs(
+      tx,
+      and(
+        eq(jobs.kind, "translate"),
+        eq(payloadField("sourceTrackId"), trackId),
+      ),
+    );
     if (track.sourceRunId) {
       tx.delete(transcriptionRuns)
         .where(eq(transcriptionRuns.id, track.sourceRunId))

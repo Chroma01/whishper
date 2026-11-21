@@ -6,10 +6,32 @@ export type AdminSection = {
   icon: IconName;
 };
 
-export const ADMIN_SECTIONS: AdminSection[] = [
-  { href: "/admin/models", label: "Local models", icon: "cube" },
-  { href: "/admin/providers", label: "External providers", icon: "globe" },
-  { href: "/admin/transcription", label: "Transcription", icon: "sliders" },
-  { href: "/admin/storage", label: "Storage", icon: "hard-drive" },
-  { href: "/admin/workers", label: "Workers", icon: "server" },
+export type AdminSectionGroup = {
+  label: string;
+  sections: AdminSection[];
+};
+
+// What people use first, then what keeps the server running.
+export const ADMIN_SECTION_GROUPS: AdminSectionGroup[] = [
+  {
+    label: "Features",
+    sections: [
+      {
+        href: "/admin/transcription",
+        label: "Transcription",
+        icon: "subtitles",
+      },
+      { href: "/admin/translation", label: "Translation", icon: "languages" },
+    ],
+  },
+  {
+    label: "System",
+    sections: [
+      { href: "/admin/providers", label: "External providers", icon: "globe" },
+      { href: "/admin/workers", label: "Workers", icon: "server" },
+      { href: "/admin/storage", label: "Storage", icon: "hard-drive" },
+    ],
+  },
 ];
+
+export const ADMIN_HOME = "/admin/transcription";

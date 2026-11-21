@@ -1,15 +1,18 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import DefaultModelPicker from "#lib/admin/DefaultModelPicker.svelte";
+  import FormMessage from "#lib/admin/FormMessage.svelte";
   import { FormSubmission } from "#lib/admin/form-submission.svelte.ts";
   import LineLengthSetting from "#lib/admin/LineLengthSetting.svelte";
   import PrecisionChoice from "#lib/admin/PrecisionChoice.svelte";
   import SectionHeader from "#lib/admin/SectionHeader.svelte";
   import SettingsCard from "#lib/admin/SettingsCard.svelte";
+  import WorkerModels from "#lib/admin/WorkerModels.svelte";
   import Icon from "#lib/components/Icon.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import LanguagePicker from "#lib/studio/LanguagePicker.svelte";
   import { DETECT_LANGUAGE } from "#lib/shared/languages.ts";
+  import { defaultModelKey } from "#lib/shared/transcription-models.ts";
 
   let { data, form } = $props();
 
@@ -18,8 +21,42 @@
 
 <SectionHeader
   title="Transcription"
-  description="The starting point for every new transcription. People can still change the model, language and alignment each time they transcribe."
+  description="The speech models on this server, and where every new transcription starts. People can still change the model, language and alignment each time they transcribe."
 />
+
+<FormMessage {form} />
+
+<div id="local-models" class="mb-4 scroll-mt-6">
+  <SettingsCard
+    icon="cube"
+    title="Local models"
+    description="Whisper models run on your worker, so the audio never leaves the server. Download the ones you use so transcriptions start right away and work offline."
+  >
+    {#if data.workers.length > 0}
+      <WorkerModels
+        workers={data.workers}
+        label="Transcription models"
+        defaultKey={data.defaults.model}
+        suggest={(models) => defaultModelKey(models)}
+      />
+    {:else}
+      <p class="text-sm text-text-muted">
+        Models live on a worker, and appear here as soon as it connects. If
+        nothing shows up within a minute, read its log with
+        <code class="font-mono text-text">docker compose logs worker</code>.
+      </p>
+    {/if}
+    <p class="text-xs text-text-muted">
+      Models download from Hugging Face. To transcribe with OpenAI, Groq or
+      another speech service, add it in
+      <a
+        href="/admin/providers"
+        class="font-medium text-accent underline-offset-2 hover:underline"
+        >External providers</a
+      >.
+    </p>
+  </SettingsCard>
+</div>
 
 <form
   method="POST"

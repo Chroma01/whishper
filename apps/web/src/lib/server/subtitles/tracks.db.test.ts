@@ -1,7 +1,13 @@
+import { randomUUID } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { db } from "#lib/server/db/index.ts";
-import { cues, subtitleTracks } from "#lib/server/db/schema.ts";
+import {
+  cues,
+  subtitleTracks,
+  transcriptionRuns,
+} from "#lib/server/db/schema.ts";
 import { seedProject } from "#lib/server/db/testing/fixtures.ts";
 import { listProjectTracks } from "#lib/server/subtitles/tracks.ts";
 
@@ -52,11 +58,87 @@ describe("listProjectTracks", () => {
         name: "whisperx · small",
         language: "en",
         cueCount: 0,
+        revision: 0,
         runId: null,
+        madeBy: null,
+        modelKey: null,
         audioTrack: null,
+        translatedFrom: null,
         createdAt: new Date(1_000),
       },
       expect.objectContaining({ id: spanish, cueCount: 2, audioTrack: 1 }),
+    ]);
+  });
+
+  it("names the model that made each transcript, and a translation's source", () => {
+    const project = seedProject();
+    const runId = db
+      .insert(transcriptionRuns)
+      .values({
+        projectId: project.projectId,
+        adapterId: "whisperx",
+        modelId: "small",
+        createdBy: project.userId,
+      })
+      .returning({ id: transcriptionRuns.id })
+      .get().id;
+    const original = db
+      .insert(subtitleTracks)
+      .values({
+        projectId: project.projectId,
+        sourceRunId: runId,
+        name: "whisperx · small",
+        language: "en",
+        revision: 3,
+      })
+      .returning({ id: subtitleTracks.id })
+      .get().id;
+    const translated = (language: string, local: boolean) =>
+      db
+        .insert(subtitleTracks)
+        .values({
+          projectId: project.projectId,
+          name: "Translation",
+          language,
+          kind: "translation",
+          metadata: {
+            adapter: local
+              ? { id: "madlad", version: "1", modelId: "madlad-400-3b" }
+              : { id: "remote", version: "1", modelId: "gpt-test" },
+            translation: {
+              jobId: randomUUID(),
+              sourceTrackId: original,
+              sourceRevision: 2,
+              sourceLanguage: "en",
+              modelLabel: "Model",
+              local,
+            },
+          },
+        })
+        .run();
+    translated("es", true);
+    translated("de", false);
+
+    expect(
+      listProjectTracks(db, project.projectId).map(
+        ({ language, modelKey, translatedFrom }) => ({
+          language,
+          modelKey,
+          translatedFrom,
+        }),
+      ),
+    ).toEqual([
+      { language: "en", modelKey: "whisperx:small", translatedFrom: null },
+      {
+        language: "es",
+        modelKey: "madlad:madlad-400-3b",
+        translatedFrom: { trackId: original, revision: 2 },
+      },
+      {
+        language: "de",
+        modelKey: "provider",
+        translatedFrom: { trackId: original, revision: 2 },
+      },
     ]);
   });
 

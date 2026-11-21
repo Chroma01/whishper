@@ -11,8 +11,10 @@ import type {
 import type {
   AvailableTranscriptionModel,
   DetectedWorkerHardware,
+  ModelChoice,
 } from "./transcription-models";
 import type { ProbeState } from "./project-status";
+import type { TranslationTask } from "./translation";
 
 export type StudioProject = {
   id: string;
@@ -60,6 +62,8 @@ export type StudioStatus = {
   run: StudioRun | null;
   // The newest preparation of each audio track, newest first.
   preparations: StudioPreparation[];
+  // Oldest first.
+  translations: TranslationTask[];
 };
 
 export type StudioDerivative = {
@@ -82,4 +86,8 @@ export type StudioData = {
   transcriptionModels: AvailableTranscriptionModel[];
   transcriptionDefaults: TranscriptionDefaults;
   detectedHardware: DetectedWorkerHardware[];
+  translations: TranslationTask[];
+  // The default first.
+  translationModels: ModelChoice[];
+  canSetUpTranslation: boolean;
 };

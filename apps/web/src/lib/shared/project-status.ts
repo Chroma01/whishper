@@ -98,9 +98,12 @@ export function isPreparationActive(
 export function isStudioActive(studio: {
   run: { status: string } | null;
   preparations: readonly { state: string }[];
+  translations: readonly { state: string }[];
 }): boolean {
   return (
-    isRunActive(studio.run) || studio.preparations.some(isPreparationActive)
+    isRunActive(studio.run) ||
+    studio.preparations.some(isPreparationActive) ||
+    studio.translations.some((task) => task.state !== "failed")
   );
 }
 

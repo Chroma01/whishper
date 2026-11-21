@@ -30,6 +30,16 @@ import {
   detectedWorkerHardware,
   transcriptionModelChoices,
 } from "#lib/server/transcription/models.ts";
+import {
+  enqueueTranslations,
+  parseTranslationRequest,
+} from "#lib/server/translation/enqueue.ts";
+import { toChoice, translationModels } from "#lib/server/translation/models.ts";
+import {
+  cancelTranslationsForUser,
+  dismissTranslationForUser,
+  translationTasks,
+} from "#lib/server/translation/tasks.ts";
 import { activeWorkerManifests } from "#lib/server/workers/presence.ts";
 import { projectDerivativeUrl, projectPageUrl } from "#lib/shared/routes.ts";
 import type { StudioData } from "#lib/shared/studio-data.ts";
@@ -87,6 +97,9 @@ export const load: PageServerLoad = async ({
     ),
     detectedHardware: detectedWorkerHardware(workerManifests),
     transcriptionDefaults,
+    translations: translationTasks(db, project.id),
+    translationModels: translationModels(db, workerManifests).map(toChoice),
+    canSetUpTranslation: user.role === "admin",
   };
 };
 
@@ -113,6 +126,43 @@ export const actions: Actions = {
       }
       redirect(303, projectPageUrl(params.projectId, params.trackId));
     }, "The transcription could not be cancelled.");
+  },
+  translate: async ({ locals, params, request }) => {
+    const user = requireUserOrLogin(locals);
+    const values = await request.formData();
+    return runFormAction(() => {
+      enqueueTranslations(
+        params.projectId,
+        user.id,
+        parseTranslationRequest(values),
+      );
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
+    }, "The translation could not be started.");
+  },
+  cancelTranslation: async ({ locals, params, request }) => {
+    const user = requireUserOrLogin(locals);
+    const jobIds = (await request.formData())
+      .getAll("jobId")
+      .map(String)
+      .filter(isUuid);
+    if (jobIds.length === 0) {
+      return fail(400, { message: "The translation is invalid." });
+    }
+    return runFormAction(() => {
+      if (!cancelTranslationsForUser(params.projectId, jobIds, user.id)) {
+        return fail(409, { message: "The translation is no longer active." });
+      }
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
+    }, "The translation could not be cancelled.");
+  },
+  dismissTranslation: async ({ locals, params, request }) => {
+    const user = requireUserOrLogin(locals);
+    const jobId = jobIdField(await request.formData());
+    if (!jobId) return fail(400, { message: "The translation is invalid." });
+    return runFormAction(() => {
+      dismissTranslationForUser(params.projectId, jobId, user.id);
+      redirect(303, projectPageUrl(params.projectId, params.trackId));
+    }, "The message could not be dismissed.");
   },
   prepareMedia: async ({ locals, params, request }) => {
     const user = requireUserOrLogin(locals);
@@ -186,6 +236,11 @@ export const actions: Actions = {
     }, "The project could not be deleted.");
   },
 };
+
+function jobIdField(values: FormData): string | null {
+  const jobId = String(values.get("jobId") ?? "");
+  return isUuid(jobId) ? jobId : null;
+}
 
 // The first track when the form names none.
 function audioTrackField(

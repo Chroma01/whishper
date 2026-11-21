@@ -14,6 +14,7 @@ export type ModelTask = {
 };
 
 export type InventoryModel = TranscriptionModel & {
+  purpose: "transcription" | "translation";
   task: ModelTask | null;
   // The message of the last download or removal, when it failed.
   failure: string | null;

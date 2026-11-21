@@ -10,11 +10,13 @@ export function trackSummaries(
   executor: Executor,
   projectId: string,
 ): ApiTrackSummary[] {
-  return listProjectTracks(executor, projectId).map(({ runId, ...track }) => ({
-    ...track,
-    transcriptionId: runId,
-    createdAt: track.createdAt.toISOString(),
-  }));
+  return listProjectTracks(executor, projectId).map(
+    ({ runId, madeBy, revision, modelKey, translatedFrom, ...track }) => ({
+      ...track,
+      transcriptionId: runId,
+      createdAt: track.createdAt.toISOString(),
+    }),
+  );
 }
 
 export function tracksForUser(

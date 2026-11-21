@@ -81,6 +81,7 @@ const mediaWorker: WorkerManifest = {
     mediaPreparation: MEDIA_PREPARATION_VERSION,
     modelCache: null,
     remoteTranscription: null,
+    translation: null,
   },
   adapters: [],
   hardware: null,

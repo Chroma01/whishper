@@ -10,9 +10,10 @@ export const REMOTE_ADAPTER_ID = "remote";
 export type RemoteModelDetails = {
   providerName: string;
   brand: ProviderBrand | null;
-  // Where the audio goes, shown so nobody sends it there by accident.
+  // Where the audio or text goes, shown so nobody sends it there by accident.
   host: string;
-  priceMicrosPerMinute: number | null;
+  // Speech models only. Anysub does not track what a chat model costs.
+  priceMicrosPerMinute?: number | null;
 };
 
 export type TranscriptionModel = {
@@ -33,6 +34,23 @@ export type TranscriptionModel = {
   fitReason: string;
   remote: RemoteModelDetails | null;
 };
+
+// What a model picker shows, for transcription and translation alike.
+export type ModelChoice = Pick<
+  TranscriptionModel,
+  | "key"
+  | "displayName"
+  | "description"
+  | "downloaded"
+  | "downloadSizeBytes"
+  | "recommended"
+  | "memoryRequirementBytes"
+  | "memoryRequirementKind"
+  | "fit"
+  | "fitLabel"
+  | "fitReason"
+  | "remote"
+>;
 
 export type AvailableTranscriptionModel = TranscriptionModel & {
   optionsSchema: Record<string, unknown>;

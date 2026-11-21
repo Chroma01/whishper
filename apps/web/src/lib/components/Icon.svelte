@@ -61,6 +61,7 @@
     "audio-lines": audioLines,
     "chevron-up": chevronUp,
     replace,
+    languages,
     target,
     upload,
     database,
@@ -128,6 +129,9 @@
 {/snippet}
 {#snippet replace()}
   <path d="M4 7h11l-3-3M20 17H9l3 3" />
+{/snippet}
+{#snippet languages()}
+  <path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
 {/snippet}
 {#snippet play()}
   <path d="m9 7 8 5-8 5z" />

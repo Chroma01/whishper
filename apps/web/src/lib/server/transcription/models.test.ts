@@ -47,6 +47,7 @@ function worker(
       mediaPreparation: null,
       modelCache: null,
       remoteTranscription: null,
+      translation: null,
     },
     adapters: [
       {

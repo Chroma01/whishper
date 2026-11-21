@@ -32,6 +32,7 @@
     derivativeUrl,
     editorCues,
     finishedRun,
+    finishedTranslations,
     playableAudioTrack,
     preparedAudioTracks,
     processingStateChanged,
@@ -40,7 +41,9 @@
   import ShortcutGuide from "#lib/studio/ShortcutGuide.svelte";
   import StudioTitlebar from "#lib/studio/StudioTitlebar.svelte";
   import TranscribeDialog from "#lib/studio/TranscribeDialog.svelte";
+  import TranslateDialog from "#lib/studio/TranslateDialog.svelte";
   import TranscriptPanel from "#lib/studio/TranscriptPanel.svelte";
+  import { isOriginal } from "#lib/studio/transcripts.ts";
   import Timeline from "#lib/timeline/Timeline.svelte";
 
   let { data, form } = $props();
@@ -51,7 +54,11 @@
   let status: StudioStatus = $derived(
     polled?.loaded === data
       ? polled.status
-      : { run: data.run, preparations: data.preparations },
+      : {
+          run: data.run,
+          preparations: data.preparations,
+          translations: data.translations,
+        },
   );
 
   // A transcript plays the audio it came from, unless the player picks
@@ -137,11 +144,12 @@
     void prepareAudioTrack(transcriptTrack);
   });
 
-  // A run that finished while this page was open, so its transcript can be
-  // offered without taking over the one being edited.
-  let readyRunId = $state<string | null>(null);
+  // Runs and translations that finished while this page was open, newest
+  // first, so their transcripts can be offered without taking over the one
+  // being edited.
+  let readyMadeBy = $state<string[]>([]);
   let readyTrack = $derived(
-    unopenedTranscript(data.tracks, data.track?.id, readyRunId),
+    unopenedTranscript(data.tracks, data.track?.id, readyMadeBy),
   );
 
   pollWhileActive(() => isStudioActive(status), 1_500, refreshStatus);
@@ -160,7 +168,12 @@
     const next: StudioStatus = await response.json();
     if (data !== loaded) return;
     if (processingStateChanged(status, next)) {
-      readyRunId = finishedRun(status, next) ?? readyRunId;
+      const run = finishedRun(status, next);
+      readyMadeBy = [
+        ...(run ? [run] : []),
+        ...finishedTranslations(status, next),
+        ...readyMadeBy,
+      ];
       return refreshAll();
     }
     polled = { loaded, status: next };
@@ -168,6 +181,8 @@
 
   let shortcutGuideOpen = $state(false);
   let transcribeDialogOpen = $state(false);
+  let translateOpen = $state(false);
+  let translateDialog = $state<TranslateDialog>();
   let mediaDialogOpen = $state(false);
   let hasTrackAndMedia = $derived(
     data.track !== null && data.project.hasSourceMedia,
@@ -175,6 +190,7 @@
   let canCreateTranscript = $derived(
     hasTrackAndMedia && !isRunActive(status.run),
   );
+  let canTranslate = $derived(data.tracks.some(isOriginal));
   let maxLineLength = $derived(
     Number(data.track?.metadata?.maxLineLength ?? DEFAULT_MAX_LINE_LENGTH),
   );
@@ -201,7 +217,10 @@
   const commands: StudioCommands = {
     transport: editor.transport,
     isDialogOpen: () =>
-      shortcutGuideOpen || transcribeDialogOpen || mediaDialogOpen,
+      shortcutGuideOpen ||
+      transcribeDialogOpen ||
+      translateOpen ||
+      mediaDialogOpen,
     openGuide: () => (shortcutGuideOpen = true),
     canSave: () => data.track !== null,
     save: () => void editor.autosave.flush(),
@@ -218,22 +237,29 @@
       editor.setTimeToPlayhead(editor.selectedCueIndex, field),
   };
 
-  async function saveBeforeTranscribing(): Promise<string | null> {
-    await editor.autosave.flush();
-    return editor.autosave.hasUnsavedChanges
-      ? "Your latest edits could not be saved, so the transcription did not start. Try again once they are saved."
-      : null;
+  // A translation reads the saved transcript, so it needs the latest edits
+  // too.
+  function saveBefore(job: string): () => Promise<string | null> {
+    return async () => {
+      await editor.autosave.flush();
+      return editor.autosave.hasUnsavedChanges
+        ? `Your latest edits could not be saved, so the ${job} did not start. Try again once they are saved.`
+        : null;
+    };
   }
 
   // Both saves settle first, so neither transcript loads a copy that a save
   // still on its way is about to replace.
   async function openTrack(trackId: string): Promise<void> {
-    readyRunId = null;
+    readyMadeBy = [];
     if (trackId === data.track?.id) return;
     await editor.autosave.flush();
     await editor.leftSave(trackId);
     await goto(projectPageUrl(data.project.id, trackId), { reset: false });
   }
+
+  const openTranslate = (trackId: string | null, languages: string[] = []) =>
+    translateDialog?.show(trackId, languages);
 
   function onStudioKeydown(event: KeyboardEvent): void {
     handleStudioKeydown(event, commands);
@@ -331,6 +357,7 @@
     autosave={editor.autosave}
     {canCreateTranscript}
     oncreatetranscript={() => (transcribeDialogOpen = true)}
+    ontranslate={canTranslate ? () => openTranslate(openTrackId) : null}
     onopenshortcuts={() => (shortcutGuideOpen = true)}
     onopenmedia={() => (mediaDialogOpen = true)}
   />
@@ -394,6 +421,7 @@
       tracks={data.tracks}
       {readyTrack}
       run={status.run}
+      translations={status.translations}
       preparations={status.preparations}
       mediaPreparationStatus={data.project.mediaPreparationStatus}
       hasSourceMedia={data.project.hasSourceMedia}
@@ -407,8 +435,9 @@
       oncreate={canCreateTranscript
         ? () => (transcribeDialogOpen = true)
         : null}
+      ontranslate={canTranslate ? openTranslate : null}
       onopentrack={openTrack}
-      ondismissready={() => (readyRunId = null)}
+      ondismissready={() => (readyMadeBy = [])}
     />
   </div>
 
@@ -441,9 +470,20 @@
       mediaDurationUs={data.project.mediaDurationUs}
       audioTracks={data.project.audioTracks}
       audioTrack={playingAudioTrack}
-      onbeforesubmit={saveBeforeTranscribing}
+      transcripts={data.tracks}
+      onbeforesubmit={saveBefore("transcription")}
     />
   {/if}
+  <TranslateDialog
+    bind:this={translateDialog}
+    bind:open={translateOpen}
+    tracks={data.tracks}
+    showAudioTrack={data.project.audioTracks.length > 1}
+    models={data.translationModels}
+    hardware={data.detectedHardware}
+    canSetUp={data.canSetUpTranslation}
+    onbeforesubmit={saveBefore("translation")}
+  />
   <MediaDialog
     bind:open={mediaDialogOpen}
     project={data.project}

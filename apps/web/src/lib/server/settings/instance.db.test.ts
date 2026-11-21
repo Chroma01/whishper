@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseTranscriptionDefaults,
+  parseTranslationSettings,
   parseUploadLimit,
   readInstanceSettings,
   updateInstanceSettings,
@@ -107,6 +108,42 @@ describe("parseUploadLimit", () => {
     ],
   ])("rejects %o", (values, field) => {
     expect(parseUploadLimit(form(values))).toMatchObject({
+      problem: { field },
+    });
+  });
+});
+
+describe("parseTranslationSettings", () => {
+  const providers = new Set(["provider-1"]);
+
+  it("clears the model when no provider is chosen", () => {
+    expect(
+      parseTranslationSettings(form({ providerId: "", model: "x" }), providers),
+    ).toEqual({
+      value: { translationProviderId: null, translationModel: null },
+    });
+  });
+
+  it("keeps a known provider's model ID", () => {
+    expect(
+      parseTranslationSettings(
+        form({ providerId: "provider-1", model: " gpt-4.1-mini " }),
+        providers,
+      ),
+    ).toEqual({
+      value: {
+        translationProviderId: "provider-1",
+        translationModel: "gpt-4.1-mini",
+      },
+    });
+  });
+
+  it.each([
+    [{ providerId: "gone", model: "gpt" }, "providerId"],
+    [{ providerId: "provider-1", model: "" }, "model"],
+    [{ providerId: "provider-1", model: "two words" }, "model"],
+  ])("refuses %o", (values, field) => {
+    expect(parseTranslationSettings(form(values), providers)).toMatchObject({
       problem: { field },
     });
   });

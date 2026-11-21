@@ -4,7 +4,8 @@ import { jobs, projects } from "#lib/server/db/schema.ts";
 import { hashToken } from "#lib/server/jobs/lease-token.ts";
 import { ACTIVE_JOB_STATES } from "#lib/shared/project-status.ts";
 
-type PayloadField = "adapterId" | "workerId";
+type PayloadField =
+  "adapterId" | "modelId" | "workerId" | "sourceTrackId" | "targetLanguage";
 
 export const isMediaPrepareJob = eq(jobs.kind, "media_prepare");
 export const isActiveJob = inArray(jobs.state, ACTIVE_JOB_STATES);

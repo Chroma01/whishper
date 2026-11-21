@@ -7,18 +7,20 @@
   import { formatBytes } from "#lib/shared/format.ts";
   import { formatPricePerMinute } from "#lib/shared/money.ts";
   import type {
-    AvailableTranscriptionModel,
     DetectedWorkerHardware,
+    ModelChoice,
   } from "#lib/shared/transcription-models.ts";
 
   type Props = {
-    models: AvailableTranscriptionModel[];
+    models: ModelChoice[];
     hardware: DetectedWorkerHardware[];
     selectedKey: string;
     onpick: (key: string) => void;
+    // Replaces the advice on which transcription model to start with.
+    subtitle?: string;
   };
 
-  let { models, hardware, selectedKey, onpick }: Props = $props();
+  let { models, hardware, selectedKey, onpick, subtitle }: Props = $props();
 
   let recommendedModel = $derived(models.find((model) => model.recommended));
   // Headings only when both kinds are on offer.
@@ -46,7 +48,7 @@
   }
 </script>
 
-{#snippet fitBadge(model: AvailableTranscriptionModel | undefined)}
+{#snippet fitBadge(model: ModelChoice | undefined)}
   {#if !model?.remote}
     <span class="shrink-0">
       <Badge tone={FIT_TONES[model?.fit ?? "unknown"]}>
@@ -58,7 +60,7 @@
 {/snippet}
 
 <!-- An external model starts with its provider, so it never reads as local. -->
-{#snippet modelName(model: AvailableTranscriptionModel)}
+{#snippet modelName(model: ModelChoice)}
   {#if model.remote}
     <span class="inline-flex shrink-0 items-center gap-1.5 text-text-muted">
       <ProviderIcon
@@ -84,11 +86,12 @@
   optionText={(model) => model.displayName}
   bind:value={() => selectedKey, onpick}
   title="Choose a model"
-  subtitle={recommendedModel
-    ? `${recommendedModel.displayName} is the best fit for your connected hardware.`
-    : models.some((model) => !model.remote)
-      ? "Small is the best starting point for most videos."
-      : "These models run on your providers' servers."}
+  subtitle={subtitle ??
+    (recommendedModel
+      ? `${recommendedModel.displayName} is the best fit for your connected hardware.`
+      : models.some((model) => !model.remote)
+        ? "Small is the best starting point for most videos."
+        : "These models run on your providers' servers.")}
   divided
 >
   {#snippet selection(model)}
@@ -124,11 +127,13 @@
             class="inline-flex items-center gap-1 text-xs whitespace-nowrap text-text-muted"
           >
             {#if model.remote}
-              <span class="tabular-nums">
-                {model.remote.priceMicrosPerMinute === null
-                  ? "Price not set"
-                  : formatPricePerMinute(model.remote.priceMicrosPerMinute)}
-              </span>
+              {#if model.remote.priceMicrosPerMinute !== undefined}
+                <span class="tabular-nums">
+                  {model.remote.priceMicrosPerMinute === null
+                    ? "Price not set"
+                    : formatPricePerMinute(model.remote.priceMicrosPerMinute)}
+                </span>
+              {/if}
             {:else}
               <span
                 class={model.downloaded === true ? "text-success" : ""}

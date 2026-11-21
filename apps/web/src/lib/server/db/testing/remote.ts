@@ -38,6 +38,7 @@ export function remoteWorker(remote: boolean): WorkerManifest {
       mediaPreparation: null,
       modelCache: null,
       remoteTranscription: remote ? "1.0" : null,
+      translation: null,
     },
     adapters: [],
     hardware: null,

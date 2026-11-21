@@ -13,7 +13,10 @@ import { jobs } from "#lib/server/db/schema.ts";
 import { completeJob } from "#lib/server/jobs/completion.ts";
 import { failJob } from "#lib/server/jobs/failure.ts";
 import { leaseJob, reportProgress } from "#lib/server/jobs/lease.ts";
-import { workerModelInventories } from "#lib/server/models/inventory.ts";
+import {
+  modelInventoriesFor,
+  workerModelInventories,
+} from "#lib/server/models/inventory.ts";
 import { cancelModelTask, requestModelTask } from "#lib/server/models/tasks.ts";
 import { recordWorkerPresence } from "#lib/server/workers/presence.ts";
 
@@ -56,6 +59,7 @@ function connectWorker(
       mediaPreparation: null,
       modelCache: MODEL_CACHE_VERSION,
       remoteTranscription: null,
+      translation: null,
     },
     adapters: [
       {
@@ -205,6 +209,7 @@ describe("model downloads", () => {
         mediaPreparation: null,
         modelCache: null,
         remoteTranscription: null,
+        translation: null,
       },
     });
 
@@ -252,5 +257,33 @@ describe("model downloads", () => {
     expect(reportProgress(lease.jobId, lease.leaseToken, 0.5, "Halfway")).toBe(
       false,
     );
+  });
+});
+
+describe("model inventories by purpose", () => {
+  it("keep each page to its own models and the workers that have them", () => {
+    const translating = connectWorker({}, [
+      model("small"),
+      model("madlad", { capabilities: ["translate"] }),
+    ]);
+    const speechOnly = connectWorker();
+
+    const translation = modelInventoriesFor(db, "translation");
+    expect(translation.map(({ workerId }) => workerId)).toEqual([
+      translating.workerId,
+    ]);
+    expect(translation[0]?.models.map(({ modelId }) => modelId)).toEqual([
+      "madlad",
+    ]);
+
+    const transcription = modelInventoriesFor(db, "transcription");
+    expect(transcription.map(({ workerId }) => workerId).sort()).toEqual(
+      [translating.workerId, speechOnly.workerId].sort(),
+    );
+    expect(
+      transcription.every(({ models }) =>
+        models.every(({ purpose }) => purpose === "transcription"),
+      ),
+    ).toBe(true);
   });
 });

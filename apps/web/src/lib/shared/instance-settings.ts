@@ -25,9 +25,17 @@ export type TranscriptionDefaults = {
   precision: Precision;
 };
 
-export type InstanceSettings = TranscriptionDefaults & {
-  maxUploadBytes: number;
+// The provider's chat model that translates, next to any local model. The
+// model is ignored without its provider.
+export type TranslationSettings = {
+  translationProviderId: string | null;
+  translationModel: string | null;
 };
+
+export type InstanceSettings = TranscriptionDefaults &
+  TranslationSettings & {
+    maxUploadBytes: number;
+  };
 
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   model: null,
@@ -36,6 +44,8 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   maxLineLength: DEFAULT_MAX_LINE_LENGTH,
   precision: "auto",
   maxUploadBytes: DEFAULT_MAX_UPLOAD_BYTES,
+  translationProviderId: null,
+  translationModel: null,
 };
 
 // Mirrors the worker's table. CTranslate2 cannot run half-precision floats on

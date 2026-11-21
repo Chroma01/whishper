@@ -108,14 +108,30 @@ export function finishedRun(
     : null;
 }
 
-// The transcript a finished run made, unless it is already open.
+// Translations that left the list between two polls. A cancelled one leaves
+// it too, but makes no transcript, so nothing offers it.
+export function finishedTranslations(
+  previous: StudioStatus,
+  next: StudioStatus,
+): string[] {
+  const remaining = new Set(next.translations.map((task) => task.jobId));
+  return previous.translations
+    .filter((task) => task.state !== "failed" && !remaining.has(task.jobId))
+    .map((task) => task.jobId);
+}
+
+// The transcript a finished run or translation made, unless it is already
+// open.
 export function unopenedTranscript(
   tracks: readonly SubtitleTrackSummary[],
   openTrackId: string | undefined,
-  runId: string | null,
+  madeBy: readonly string[],
 ): SubtitleTrackSummary | null {
-  const made = runId ? tracks.find((track) => track.runId === runId) : null;
-  return made && made.id !== openTrackId ? made : null;
+  for (const id of madeBy) {
+    const made = tracks.find((track) => track.madeBy === id);
+    if (made && made.id !== openTrackId) return made;
+  }
+  return null;
 }
 
 // Progress within a state is shown from the status alone. A new run or a
@@ -128,8 +144,16 @@ export function processingStateChanged(
   return (
     previous.run?.id !== next.run?.id ||
     previous.run?.status !== next.run?.status ||
-    preparationStates(previous) !== preparationStates(next)
+    preparationStates(previous) !== preparationStates(next) ||
+    translationStates(previous) !== translationStates(next)
   );
+}
+
+// A translation that finished leaves the list and brings a new transcript.
+function translationStates(status: StudioStatus): string {
+  return status.translations
+    .map(({ jobId, state }) => `${jobId}:${state}`)
+    .join(",");
 }
 
 function preparationStates(status: StudioStatus): string {

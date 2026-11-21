@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyRemoteModel } from "#lib/shared/providers.ts";
+import { classifyRemoteModel, isChatModel } from "#lib/shared/providers.ts";
 
 describe("classifyRemoteModel", () => {
   it.each([
@@ -23,5 +23,22 @@ describe("classifyRemoteModel", () => {
     ["gpt-4.1", "other"],
   ])("guesses from the name without a type: %s", (remoteId, kind) => {
     expect(classifyRemoteModel(remoteId)).toBe(kind);
+  });
+});
+
+describe("isChatModel", () => {
+  it.each([
+    ["gpt-4.1-mini", null, true],
+    ["meta-llama/llama-3.3-70b-instruct", null, true],
+    ["deepseek-r1-0528", "chat", true],
+    ["whisper-large-v3", null, false],
+    ["gpt-4o-mini-transcribe", null, false],
+    ["voxtral-small-24b", null, false],
+    ["text-embedding-3-small", null, false],
+    ["tts-1", null, false],
+    ["llama-guard-4-12b", null, false],
+    ["gemma-3", "audio", false],
+  ])("%s with type %s is a chat model: %s", (remoteId, type, expected) => {
+    expect(isChatModel(remoteId, type)).toBe(expected);
   });
 });

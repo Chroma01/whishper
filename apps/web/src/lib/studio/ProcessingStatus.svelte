@@ -5,10 +5,12 @@
     isPreparationActive,
     isRunActive,
   } from "#lib/shared/project-status.ts";
+  import { languageName } from "#lib/shared/languages.ts";
   import type {
     StudioData,
     StudioPreparation,
   } from "#lib/shared/studio-data.ts";
+  import type { TranslationTask } from "#lib/shared/translation.ts";
 
   type Props = {
     run: StudioData["run"];
@@ -18,9 +20,33 @@
     // audio track and show in the player.
     preparation: StudioPreparation | null;
     mediaPreparationStatus: StudioData["project"]["mediaPreparationStatus"];
+    // Translations that are queued or running.
+    translations: TranslationTask[];
   };
 
-  let { run, runLabel, preparation, mediaPreparationStatus }: Props = $props();
+  let {
+    run,
+    runLabel,
+    preparation,
+    mediaPreparationStatus,
+    translations,
+  }: Props = $props();
+
+  // Waiting translations share one row, so a long batch leaves room for the
+  // subtitles.
+  const waiting = $derived(
+    translations.filter((task) => task.state === "queued"),
+  );
+  const shownTranslations = $derived(
+    waiting.length > 1
+      ? translations.filter((task) => task.state !== "queued")
+      : translations,
+  );
+  const waitingLanguages = $derived(
+    new Intl.ListFormat("en-GB").format(
+      waiting.map((task) => languageName(task.targetLanguage)),
+    ),
+  );
 </script>
 
 {#snippet activeJob(
@@ -28,6 +54,7 @@
   message: string,
   progress: number | null,
   cancelAction?: string,
+  fields: Record<string, string | string[]> = {},
 )}
   <div class="grid gap-2 border-b border-border px-4 py-2.5">
     <div class="flex items-center gap-3">
@@ -46,6 +73,11 @@
           action={cancelAction}
           class="-my-1.5 -mr-3 shrink-0"
         >
+          {#each Object.entries(fields) as [name, values] (name)}
+            {#each [values].flat() as value (value)}
+              <input type="hidden" {name} {value} />
+            {/each}
+          {/each}
           <Button type="submit" size="sm" variant="ghost">Cancel</Button>
         </form>
       {/if}
@@ -82,6 +114,25 @@
   {@render failure(
     "Transcription failed",
     String(run.error?.message ?? "The adapter run failed."),
+  )}
+{/if}
+
+{#each shownTranslations as task (task.jobId)}
+  {@render activeJob(
+    `${languageName(task.targetLanguage)} translation`,
+    task.progressMessage ?? "Waiting for a worker",
+    task.progress,
+    "?/cancelTranslation",
+    { jobId: task.jobId },
+  )}
+{/each}
+{#if waiting.length > 1}
+  {@render activeJob(
+    `${waiting.length} ${shownTranslations.length ? "more " : ""}translations`,
+    `Waiting: ${waitingLanguages}`,
+    0,
+    "?/cancelTranslation",
+    { jobId: waiting.map((task) => task.jobId) },
   )}
 {/if}
 

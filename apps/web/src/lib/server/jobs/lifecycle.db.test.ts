@@ -213,6 +213,7 @@ describe("leaseJob reclaim", () => {
         mediaPreparation: null,
         modelCache: null,
         remoteTranscription: null,
+        translation: null,
       },
       adapters: [],
       hardware: null,

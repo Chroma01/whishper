@@ -21,6 +21,7 @@ import type {
   StudioRun,
   StudioStatus,
 } from "#lib/shared/studio-data.ts";
+import { translationTasks } from "#lib/server/translation/tasks.ts";
 
 const JOB_PROGRESS = {
   progress: jobs.progress,
@@ -153,6 +154,7 @@ export function studioStatus(
   return {
     run: latestRun(executor, projectId),
     preparations: latestMediaPreparations(executor, projectId),
+    translations: translationTasks(executor, projectId),
   };
 }
 

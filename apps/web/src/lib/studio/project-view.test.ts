@@ -5,6 +5,7 @@ import {
   derivativeUrl,
   editorCues,
   finishedRun,
+  finishedTranslations,
   playableAudioTrack,
   preparedAudioTracks,
   processingStateChanged,
@@ -129,13 +130,14 @@ describe("processingStateChanged", () => {
     jobState: "leased",
   };
   const preparation = { ...progress, state: "leased", audioTrack: 1 };
-  const status = { run, preparations: [preparation] };
+  const status = { run, preparations: [preparation], translations: [] };
 
   it("ignores progress within the same state", () => {
     expect(
       processingStateChanged(status, {
         run: { ...run, progress: 0.6, progressMessage: "Aligning" },
         preparations: [{ ...preparation, progress: 0.9 }],
+        translations: [],
       }),
     ).toBe(false);
   });
@@ -182,7 +184,7 @@ describe("finishedRun", () => {
     progressMessage: null,
     error: null,
   };
-  const status = { run, preparations: [] };
+  const status = { run, preparations: [], translations: [] };
 
   it("names a run that completed since the last poll", () => {
     expect(
@@ -200,25 +202,64 @@ describe("finishedRun", () => {
   });
 });
 
+describe("finishedTranslations", () => {
+  const task = {
+    jobId: "job",
+    sourceTrackId: "track",
+    targetLanguage: "es",
+    state: "leased" as const,
+    progress: 0.5,
+    progressMessage: null,
+    error: null,
+  };
+  const running = { run: null, preparations: [], translations: [task] };
+  const idle = { ...running, translations: [] };
+
+  it("names a translation that left the list since the last poll", () => {
+    expect(finishedTranslations(running, idle)).toEqual(["job"]);
+    expect(processingStateChanged(running, idle)).toBe(true);
+  });
+
+  it("ignores one still running or one that failed", () => {
+    expect(finishedTranslations(running, running)).toEqual([]);
+    const failed = {
+      ...running,
+      translations: [{ ...task, state: "failed" as const }],
+    };
+    expect(finishedTranslations(running, failed)).toEqual([]);
+    expect(finishedTranslations(failed, idle)).toEqual([]);
+  });
+});
+
 describe("unopenedTranscript", () => {
-  const transcript = (id: string, runId: string | null) => ({
+  const transcript = (id: string, madeBy: string | null) => ({
     id,
     name: "whisperx · small",
     language: "en",
     cueCount: 1,
-    runId,
+    revision: 0,
+    runId: madeBy,
+    madeBy,
+    modelKey: "whisperx:small",
     audioTrack: 0,
+    translatedFrom: null,
     createdAt: new Date(0),
   });
   const tracks = [transcript("old", "first"), transcript("new", "second")];
 
   it("finds the transcript the run made while another is open", () => {
-    expect(unopenedTranscript(tracks, "old", "second")?.id).toBe("new");
+    expect(unopenedTranscript(tracks, "old", ["second"])?.id).toBe("new");
   });
 
   it("is null once that transcript is open, or without a finished run", () => {
-    expect(unopenedTranscript(tracks, "new", "second")).toBeNull();
-    expect(unopenedTranscript(tracks, "old", null)).toBeNull();
-    expect(unopenedTranscript(tracks, "old", "deleted")).toBeNull();
+    expect(unopenedTranscript(tracks, "new", ["second"])).toBeNull();
+    expect(unopenedTranscript(tracks, "old", [])).toBeNull();
+    expect(unopenedTranscript(tracks, "old", ["deleted"])).toBeNull();
+  });
+
+  it("skips a finished job that made no transcript, such as a cancelled one", () => {
+    expect(unopenedTranscript(tracks, "old", ["cancelled", "second"])?.id).toBe(
+      "new",
+    );
   });
 });

@@ -22,6 +22,7 @@ function manifest(): WorkerManifest {
       mediaPreparation: null,
       modelCache: null,
       remoteTranscription: null,
+      translation: null,
     },
     adapters: [],
     hardware: null,

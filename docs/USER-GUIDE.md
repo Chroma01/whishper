@@ -72,11 +72,24 @@ Each track you play needs its own waveform, and its own preview when the browser
 
 ### More than one transcript
 
-A project can have several transcripts, such as one per language, or the same audio with a bigger model. Choose **New transcript** in the studio title bar to add one. The transcript you have open stays, and you can keep editing it while the new one runs. The transcript menu lists it with its progress, and when it finishes, the studio offers to open it.
+A project can have several transcripts, such as one per language, or the same audio with a bigger model. Choose **New transcript** in the studio title bar to add one. If the project already has a transcript from the same model, audio track and language, the form says so: with the same settings, the new one usually comes out the same. The transcript you have open stays, and you can keep editing it while the new one runs. The transcript menu lists it with its progress, and when it finishes, the studio offers to open it.
 
 To switch, open the menu with the transcript's language above the subtitle list. Each transcript shows when it was made and with which model. Your edits save first. The browser's address names the open transcript, so a reload or a shared link opens the same one. Export works on the open transcript, and the menu's last item deletes it. Deleting one keeps the media and the other transcripts.
 
 Projects transcribed more than once before Anysub 4.3 kept every earlier run, though the studio only showed the newest. Those older transcripts now appear in the menu too, so you can open or delete them.
+
+## Translating
+
+Press **Translate** in the studio title bar, or choose **Translate** in the transcript menu. A translation always starts from an original transcript, the kind made from the audio, because translating a translation adds mistakes. The dialog starts on the open transcript, or on the original a translated one came from, and you can pick another original if the project has several. Choose one or more languages and a model, then press **Translate**. A language that already has an up-to-date translation is marked **Already translated**. Each language becomes a new transcript with the original's timing. The studio shows the progress, and offers to open each one when it's ready. You can keep editing while they run.
+
+Translation works on whole sentences, then spreads each one back over the subtitles it came from, so the meaning holds across line breaks. A translated line longer than the line length splits into shorter subtitles.
+
+Two kinds of model can translate. An administrator sets them up under **Administration > Translation**:
+
+- **A provider's chat model**, such as one from OpenAI or OpenRouter, or a model on your own server. It gives the most natural subtitles. The transcript's text is sent to that provider.
+- **MADLAD-400**, which runs on your server, so the text never leaves it. Download it on the same page. It's more literal, so read its subtitles through before you publish them.
+
+A translated transcript says which transcript and model it came from, and the transcript's name opens it. If you edit the original afterwards, it tells you, and **Translate again** makes a fresh translation. The old one stays until you delete it, and points to the newer one. A translation that fails shows its error, and **Try again** reopens the dialog with the same transcript and language.
 
 ### Runs and failures
 

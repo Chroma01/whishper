@@ -12,6 +12,7 @@ import {
   MIN_UPLOAD_LIMIT_GIB,
   type InstanceSettings,
   type TranscriptionDefaults,
+  type TranslationSettings,
 } from "#lib/shared/instance-settings.ts";
 import { DETECT_LANGUAGE, LANGUAGE_TAG } from "#lib/shared/languages.ts";
 import { parseModelKey } from "#lib/shared/transcription-models.ts";
@@ -83,6 +84,36 @@ export function parseTranscriptionDefaults(
       maxLineLength,
       precision,
     },
+  };
+}
+
+// Model IDs are names such as "gpt-4.1-mini" or "meta-llama/llama-3.3-70b".
+const MAX_MODEL_ID_LENGTH = 200;
+const MODEL_ID = /^\S+$/;
+
+export function parseTranslationSettings(
+  form: FormData,
+  providerIds: ReadonlySet<string>,
+): Parsed<TranslationSettings> {
+  const providerId = String(form.get("providerId") ?? "");
+  const model = String(form.get("model") ?? "").trim();
+  if (!providerId) {
+    return { value: { translationProviderId: null, translationModel: null } };
+  }
+  if (!providerIds.has(providerId)) {
+    return problem("providerId", "Choose a provider from the list.");
+  }
+  if (!model) {
+    return problem(
+      "model",
+      "Enter the ID of one of the provider's chat models.",
+    );
+  }
+  if (model.length > MAX_MODEL_ID_LENGTH || !MODEL_ID.test(model)) {
+    return problem("model", "A model ID has no spaces, such as gpt-4.1-mini.");
+  }
+  return {
+    value: { translationProviderId: providerId, translationModel: model },
   };
 }
 

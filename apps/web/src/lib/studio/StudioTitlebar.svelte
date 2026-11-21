@@ -54,6 +54,8 @@
     autosave: Autosave;
     canCreateTranscript: boolean;
     oncreatetranscript: () => void;
+    // Null when no original transcript is left to translate from.
+    ontranslate: (() => void) | null;
     onopenshortcuts: () => void;
     onopenmedia: () => void;
   };
@@ -64,6 +66,7 @@
     autosave,
     canCreateTranscript,
     oncreatetranscript,
+    ontranslate,
     onopenshortcuts,
     onopenmedia,
   }: Props = $props();
@@ -140,6 +143,12 @@
         <span class="max-sm:sr-only">New transcript</span>
       </Button>
     {/if}
+    {#if ontranslate}
+      <Button size="sm" class="max-sm:px-2" onclick={ontranslate}>
+        <Icon name="languages" size={16} />
+        <span class="max-sm:sr-only">Translate</span>
+      </Button>
+    {/if}
     {#if track}
       <Menu label="Export" align="end">
         {#snippet trigger(args)}
@@ -169,9 +178,11 @@
         {/each}
       </Menu>
     {/if}
+    <!-- Phones have no keyboard to use them with. -->
     <IconButton
       label="Keyboard shortcuts"
       icon="keyboard"
+      class="max-sm:hidden"
       onclick={onopenshortcuts}
     />
     <Menu label="Project actions" align="end">

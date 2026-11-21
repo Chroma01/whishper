@@ -26,7 +26,7 @@ Worker API
 Python worker  <---->  project storage and model cache
 ```
 
-A future optional LibreTranslate container may provide local translation. Administrators may add workers on the same host. Planned: workers on remote machines, which today cannot read the shared `/data` mount they need (see CONFIGURATION.md).
+Administrators may add workers on the same host. Planned: workers on remote machines, which today cannot read the shared `/data` mount they need (see CONFIGURATION.md).
 
 The default stack does not include a database server, Redis, a search service, a reverse proxy, or object storage.
 
@@ -90,7 +90,8 @@ Workers perform expensive or failure-prone media and ML work:
 - Generate preview proxies, waveform peaks, and thumbnails.
 - Download and cache models.
 - Transcribe, align, and segment.
-- Planned: audio derivatives, URL downloads through yt-dlp, speaker diarization, translation through LibreTranslate, and large export artifacts when application-side generation would block requests.
+- Translate transcripts.
+- Planned: audio derivatives, URL downloads through yt-dlp, speaker diarization, and large export artifacts when application-side generation would block requests.
 
 Workers do not connect to the application database. They poll the internal API, lease compatible work, transfer authorized assets, report progress, and upload versioned results.
 
@@ -108,7 +109,7 @@ A worker image built without the local models, the `-remote` tag, runs media pre
 
 The worker core does not import Faster-Whisper, WhisperX, or another model library directly. It discovers adapter packages through the `anysub.adapters` Python entry-point group. Each adapter publishes a manifest with its protocol version, adapter version, models, languages, capabilities, and a JSON Schema for model-specific options.
 
-The capabilities are `transcribe` and `align`. Diarization and translation will add their own capabilities once they are built. A model may implement only the capabilities it supports. The scheduler matches jobs against worker manifests instead of assuming a particular library or model family.
+The capabilities are `transcribe`, `align` and `translate`. Diarization will add its own once it is built. A model may implement only the capabilities it supports. The scheduler matches jobs against worker manifests instead of assuming a particular library or model family.
 
 Adapters receive typed requests and return normalized, versioned Anysub artifacts. Subtitle storage and the editor therefore do not depend on Faster-Whisper, WhisperX, Voxtral, Qwen, or any other upstream result shape.
 
@@ -137,13 +138,13 @@ Workers read media through a read-only shared mount. Media preparation falls bac
 
 The database stores durable runs, jobs, attempts, leases, progress, cancellations, and errors. Planned: separate durable stages. The application performs lease transactions and exposes them through the worker API.
 
-The built jobs are `transcribe`, `media_prepare` and `model_cache`. A `transcribe` job runs ASR and alignment as one job. A `model_cache` job downloads or removes one model on one named worker, because each worker keeps its own cache; only that worker can lease it, and it goes ahead of transcriptions. It belongs to no workspace. Planned: separate durable stages, with diarization as an optional one:
+The built jobs are `transcribe`, `translate`, `media_prepare` and `model_cache`. A `transcribe` job runs ASR and alignment as one job. A `model_cache` job downloads or removes one model on one named worker, because each worker keeps its own cache; only that worker can lease it, and it goes ahead of transcriptions. It belongs to no workspace. Planned: separate durable stages, with diarization as an optional one:
 
 ```text
 prepare -> transcribe -> align -> diarize? -> segment -> finalize
 ```
 
-Proxy creation runs inside `media_prepare`. Planned as durable jobs: translation, export, purge, and URL import.
+Proxy creation runs inside `media_prepare`. Planned as durable jobs: export, purge, and URL import.
 
 The scheduler leases jobs by priority, then oldest first. Planned: FIFO order within a workspace with fair rotation across workspaces, and worker affinity between related stages without making affinity a correctness requirement.
 
@@ -167,7 +168,7 @@ Retranscription creates a new run. It does not replace prior output.
 
 ### Track and cue
 
-A project can contain multiple subtitle tracks. Tracks come from transcription runs. The studio edits one track at a time and names it in the page address, so a reload or a form action keeps it. It plays the audio track the open transcript came from. Planned: tracks from imported subtitle files and translations, with each translated track recording its source lineage.
+A project can contain multiple subtitle tracks. Tracks come from transcription runs and translations; a translated track records its source track, the source's revision and the model. The studio edits one track at a time and names it in the page address, so a reload or a form action keeps it. It plays the audio track the open transcript came from. Planned: tracks from imported subtitle files.
 
 Cues are the editing unit. Each cue has a stable identity, integer-microsecond timing, and text. Planned: a semantic type and optional speaker or style references. Stable IDs and revisioned commands leave room for simultaneous editing later.
 
@@ -252,11 +253,11 @@ Docker images do not bundle large model weights.
 
 ## Translation
 
-Translation is not built yet. The plan is LibreTranslate behind an internal translation-provider interface. Administrators would enable an optional Compose profile or configure an existing LibreTranslate endpoint.
+A `translate` job carries a snapshot of the source cues, so later edits do not change a translation in progress. One job runs per target language, and each finished job adds a track. Workers that report the `translation` capability lease these jobs.
 
-Translation creates a new track. The translation workflow may merge, split, and reflow cues to meet target-language reading rules while retaining source lineage and overall spoken intervals.
+Two kinds of model translate. A provider's chat model, chosen under **Administration > Translation**, runs through the reserved `remote` adapter like remote transcription: the lease carries the provider's details, and the worker calls its OpenAI-compatible `/chat/completions`. MADLAD-400 3B is a built-in adapter that runs through CTranslate2 on the worker, so the text never leaves the server; NLLB was ruled out by its non-commercial license.
 
-A later OpenAI-compatible provider can support local Ollama or llama.cpp servers and explicitly approved external services. V1 contains no such adapter.
+The worker joins cues into sentences, ending one at final punctuation, a pause of two seconds, or eight cues, and translates sentences rather than cues. Chat models get batches of numbered sentences with the sentences around them as context, and must answer with every number; a reply that misses one is asked again and then split in half. The worker then spreads each translated sentence over the cues it came from, in proportion to their share of the source text, preferring clause ends and keeping lines within the source's line length, or a shorter one for Chinese and Japanese. A part that still does not fit becomes evenly sized cues within its time.
 
 ## Editor and design system
 
@@ -361,7 +362,6 @@ A managed deployment can add object storage, autoscaling, tenant quotas, billing
 
 Not decided and not built.
 
-- External and OpenAI-compatible translation providers.
 - Language-neutral out-of-process adapter protocol.
 - Simultaneous editing and CRDT choice.
 - S3-compatible storage implementation.
