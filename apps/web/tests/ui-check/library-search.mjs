@@ -23,6 +23,22 @@ async function transcriptWord(page) {
   return words[0] ?? null;
 }
 
+async function checkEnglishCode(page) {
+  const languages = page
+    .locator("main ul > li")
+    .getByText(/^Transcripts in .*English/)
+    .first();
+  if (!(await languages.count())) return false;
+  const codes = await languages
+    .locator("..")
+    .locator('span[aria-hidden="true"]')
+    .textContent();
+  if (!codes.trim().split(/\s+/).includes("en")) {
+    throw new Error(`a project with an English transcript shows "${codes}"`);
+  }
+  return true;
+}
+
 export async function checkLibrarySearch(context, theme) {
   const page = await context.newPage();
   const label = `library search ${theme}`;
@@ -34,6 +50,7 @@ export async function checkLibrarySearch(context, theme) {
       return 0;
     }
     await open(page, "/");
+    const codeChecked = await checkEnglishCode(page);
     const box = page.getByRole("searchbox", {
       name: "Search project names and transcripts",
     });
@@ -71,7 +88,10 @@ export async function checkLibrarySearch(context, theme) {
     if (!(await isFocused(status))) {
       throw new Error("Escape did not return focus to the status filter");
     }
-    console.log(`${label}: slash key, transcript matches, filter menu ok`);
+    const codeNote = codeChecked ? ", language codes" : "";
+    console.log(
+      `${label}: slash key, transcript matches${codeNote}, filter menu ok`,
+    );
     return failures;
   } catch (error) {
     console.error(`${label}: ${error.message}`);

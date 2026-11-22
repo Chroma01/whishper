@@ -28,7 +28,7 @@
     projectSourceFallback,
   } from "#lib/shared/project-status.ts";
   import { projectDerivativeUrl, projectPageUrl } from "#lib/shared/routes.ts";
-  import { languageFlag, languageName } from "#lib/shared/languages.ts";
+  import { languageName } from "#lib/shared/languages.ts";
   import { mediaPlaceholder } from "./media-placeholder";
   import ProjectMatches from "./ProjectMatches.svelte";
 
@@ -199,13 +199,12 @@
         </span>
         {#if project.languages.length > 0}
           <span
-            class="shrink-0"
+            class="flex shrink-0 items-center gap-1 rounded bg-border px-1.5 py-px leading-3.5 font-medium"
             title={project.languages.map(languageName).join(", ")}
           >
-            <span aria-hidden="true">
-              {project.languages
-                .map((code) => languageFlag(code) ?? code.toUpperCase())
-                .join(" ")}
+            <Icon name="languages" size={12} />
+            <span class="tracking-wide uppercase" aria-hidden="true">
+              {project.languages.join(" ")}
             </span>
             <span class="sr-only">
               Transcripts in {project.languages.map(languageName).join(", ")}

@@ -2,6 +2,12 @@
 
 Anysub follows [Semantic Versioning](https://semver.org). The web and worker images always share one version. Each release lists what changed for the people who run and use Anysub.
 
+## [Unreleased]
+
+### Fixed
+
+- The library and search results labeled transcripts with flag image names, such as "gb" for English. They now show language codes, such as EN.
+
 ## [4.4.0] - 2026-11-21
 
 This release improves search, adds find and replace to the studio, and brings translation, using a provider's chat model or your own server.

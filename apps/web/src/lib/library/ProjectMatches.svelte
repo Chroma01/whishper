@@ -1,7 +1,7 @@
 <script lang="ts">
   import HighlightedText from "#lib/components/ui/HighlightedText.svelte";
   import { formatClock, pluralize } from "#lib/shared/format.ts";
-  import { languageFlag, languageName } from "#lib/shared/languages.ts";
+  import { languageName } from "#lib/shared/languages.ts";
   import type {
     ProjectMatch,
     TranscriptHit,
@@ -59,7 +59,12 @@
           </span>
           <span class="line-clamp-2 min-w-0" dir="auto">
             {#if showLanguages}
-              <span aria-hidden="true">{languageFlag(hit.language) ?? ""}</span>
+              <span
+                class="me-1.5 rounded bg-border px-1 py-px text-xs font-medium tracking-wide text-text-muted uppercase"
+                aria-hidden="true"
+              >
+                {hit.language}
+              </span>
               <span class="sr-only">{languageName(hit.language)}:</span>
             {/if}
             <HighlightedText segments={hit.segments} />
